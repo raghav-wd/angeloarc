@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPublic", "order": "ASCENDING" },
+        { "fieldPath": "username", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "users",
+      "fieldPath": "tracker",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "passwordHash",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "passwordSalt",
+      "indexes": []
+    }
+  ]
+}
