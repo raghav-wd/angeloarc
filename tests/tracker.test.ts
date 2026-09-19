@@ -555,11 +555,19 @@ describe('radial geometry', () => {
     assert.deepEqual(polarPoint(10, 20, 0, 42), { x: 10, y: 20 });
   });
 
-  for (const dayCount of [28, 29, 30, 31]) {
-    it(`lays out all ${dayCount} equal-width days with a 90-degree upper-left opening`, () => {
-      const sectors = getDaySectors(dayCount);
+  for (const { month, sundayDays } of [
+    { month: { year: 2026, month: 1 }, sundayDays: [1, 8, 15, 22] },
+    { month: { year: 2024, month: 1 }, sundayDays: [4, 11, 18, 25] },
+    { month: { year: 2026, month: 3 }, sundayDays: [5, 12, 19, 26] },
+    { month: { year: 2026, month: 7 }, sundayDays: [2, 9, 16, 23, 30] },
+    { month: { year: 2026, month: 4 }, sundayDays: [3, 10, 17, 24, 31] },
+  ]) {
+    const dayCount = daysInMonth(month);
+    it(`lays out ${month.year}-${month.month + 1} with weekly gaps after its Sundays`, () => {
+      const sectors = getDaySectors(month);
       assert.equal(sectors.length, dayCount);
       assert.deepEqual(sectors.map((sector) => sector.day), Array.from({ length: dayCount }, (_, i) => i + 1));
+      assert.deepEqual(sectors.filter((sector) => sector.endsWeek).map((sector) => sector.day), sundayDays);
       assert.equal(sectors[0].startAngle, -90);
       assert.equal(sectors.at(-1)?.endAngle, 180);
       assert.equal(360 - (sectors[dayCount - 1].endAngle - sectors[0].startAngle), 90);
@@ -576,7 +584,7 @@ describe('radial geometry', () => {
         totalWidth += sector.endAngle - sector.startAngle;
         if (index < sectors.length - 1) {
           const next = sectors[index + 1];
-          const isWeekBoundary = sector.day % 7 === 0;
+          const isWeekBoundary = sundayDays.includes(sector.day);
           const gap = next.startAngle - sector.endAngle;
           approximately(gap, isWeekBoundary ? 3.2 : 0.6);
           if (isWeekBoundary) {
@@ -589,7 +597,8 @@ describe('radial geometry', () => {
         assert.match(path, /^M [-\d. ]+ A [-\d. ]+ L [-\d. ]+ A [-\d. ]+ Z$/);
         assert.doesNotMatch(path, /NaN|Infinity/);
       }
-      assert.equal(weekBoundaries, dayCount === 28 ? 3 : 4);
+      const internalSundays = sundayDays.filter((day) => day < dayCount).length;
+      assert.equal(weekBoundaries, internalSundays);
       approximately(totalGaps, (dayCount - 1) * 0.6 + weekBoundaries * 2.6);
       approximately(totalWidth + totalGaps, 270);
     });
@@ -645,8 +654,13 @@ describe('radial geometry', () => {
     assert.throws(() => annularSectorPath(0, 0, 5, Infinity, -90, 0), /finite/);
     assert.throws(() => annularSectorPath(0, 0, 5, 10, 0, 0), /span/);
     assert.throws(() => annularSectorPath(0, 0, 5, 10, 0, 361), /span/);
-    for (const count of [0, -1, 32, 28.5, NaN, Infinity]) {
-      assert.throws(() => getDaySectors(count), /Day count/);
+    for (const month of [
+      { year: 2026, month: -1 },
+      { year: 2026, month: 12 },
+      { year: -1, month: 0 },
+      null,
+    ]) {
+      assert.throws(() => getDaySectors(month as Month), /Month/);
     }
   });
 });

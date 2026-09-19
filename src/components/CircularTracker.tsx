@@ -188,7 +188,7 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
   const svg = useRef<SVGSVGElement>(null)
   const days = daysInMonth(month)
-  const sectors = useMemo(() => getDaySectors(days), [days])
+  const sectors = useMemo(() => getDaySectors(month), [month])
   const stats = getMonthStats(state, month)
   const ringStep = 29
   const ringWidth = 25.5
@@ -276,7 +276,7 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
           />
         ))}
 
-        {sectors.filter((sector) => sector.day % 7 === 0 && sector.day < days).map((sector) => {
+        {sectors.filter((sector) => sector.endsWeek && sector.day < days).map((sector) => {
           const next = sectors[sector.day]
           const angle = (sector.endAngle + next.startAngle) / 2
           const from = polarPoint(center, center, innerRadius - 3, angle)

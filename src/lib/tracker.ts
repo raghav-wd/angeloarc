@@ -399,18 +399,28 @@ export function annularSectorPath(
 }
 
 export function getDaySectors(
-  dayCount: number,
-): Array<{ day: number; startAngle: number; endAngle: number; midAngle: number }> {
-  if (!Number.isInteger(dayCount) || dayCount < 1 || dayCount > 31) {
-    throw new Error('Day count must be an integer from 1 to 31.');
-  }
+  month: Month,
+): Array<{ day: number; startAngle: number; endAngle: number; midAngle: number; endsWeek: boolean }> {
+  const dayCount = daysInMonth(month);
   const dailyGap = 0.6;
   const weeklyGap = 2.6;
-  const weekBoundaries = Math.floor((dayCount - 1) / 7);
+  const firstDate = new Date(Date.UTC(1970, 0, 1, 12));
+  firstDate.setUTCFullYear(month.year, month.month, 1);
+  const firstWeekday = firstDate.getUTCDay();
+  const endsWeek = (day: number) => (firstWeekday + day - 1) % 7 === 0;
+  const weekBoundaries = Array.from(
+    { length: dayCount - 1 },
+    (_, index) => index + 1,
+  ).filter(endsWeek).length;
   const width = (270 - (dayCount - 1) * dailyGap - weekBoundaries * weeklyGap) / dayCount;
+  let passedWeekBoundaries = 0;
+
   return Array.from({ length: dayCount }, (_, index) => {
-    const startAngle = -90 + index * (width + dailyGap) + Math.floor(index / 7) * weeklyGap;
+    const day = index + 1;
+    const startAngle = -90 + index * (width + dailyGap) + passedWeekBoundaries * weeklyGap;
     const endAngle = index === dayCount - 1 ? 180 : startAngle + width;
-    return { day: index + 1, startAngle, endAngle, midAngle: (startAngle + endAngle) / 2 };
+    const sector = { day, startAngle, endAngle, midAngle: (startAngle + endAngle) / 2, endsWeek: endsWeek(day) };
+    if (sector.endsWeek && day < dayCount) passedWeekBoundaries += 1;
+    return sector;
   });
 }
