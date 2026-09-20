@@ -99,7 +99,13 @@ Skip the database creation command if the project already has the `(default)` Fi
 gcloud run deploy angelo-api --source=backend --region=YOUR_REGION --allow-unauthenticated --service-account=angelo-api@YOUR_PROJECT_ID.iam.gserviceaccount.com --memory=512Mi --concurrency=20 --max-instances=3 --set-env-vars="NODE_ENV=production,DATA_STORE=firestore,ALLOWED_ORIGINS=https://OWNER.github.io"
 ```
 
-The Cloud Run service must allow unauthenticated HTTP access because signup, login, health, search, and public profiles are public API routes. Private tracker and account routes still require the app's bearer session. After deployment, verify `https://YOUR_SERVICE_URL/healthz`.
+The Cloud Run service must allow unauthenticated HTTP access because signup, login, health, search, and public profiles are public API routes. Private tracker and account routes still require the app's bearer session. After deployment, verify `https://YOUR_SERVICE_URL/health`.
+
+### Automatic backend deployment
+
+`.github/workflows/deploy-backend.yml` deploys backend changes pushed to `main`. It uses GitHub OIDC with Google Workload Identity Federation, so there is no long-lived service-account JSON key to store in GitHub. The checked-in defaults target the `angeloarc` project, its existing `angelo-api` runtime service account, and `asia-south2`. Those non-secret identifiers can be overridden with repository variables named `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_SERVICE_ACCOUNT`, `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`, and `ALLOWED_ORIGINS`.
+
+The Google Cloud project must contain the matching Workload Identity provider and `github-deployer` service account. The provider is restricted to this repository's `main` branch, while the deployer receives only the source-deployment, service-usage, and runtime-service-account permissions needed by `gcloud run deploy --source`. The workflow deliberately does not accept a `credentials_json` input; Google authentication requires exactly one mode, and keyless federation is the configured mode.
 
 If the backend ships a Firestore index definition, apply it before enabling profile search in production as described in `backend/README.md`.
 

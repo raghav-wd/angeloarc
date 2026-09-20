@@ -135,16 +135,20 @@ describe('health, security headers, and CORS', () => {
     const { app } = await testApp()
     context.after(() => app.close())
 
-    const allowed = await app.inject({ method: 'GET', url: '/healthz', headers: { origin: ORIGIN } })
+    const allowed = await app.inject({ method: 'GET', url: '/health', headers: { origin: ORIGIN } })
     assert.equal(allowed.statusCode, 200)
     assert.deepEqual(allowed.json(), { status: 'ok' })
     assert.equal(allowed.headers['access-control-allow-origin'], ORIGIN)
     assert.equal(allowed.headers['access-control-allow-credentials'], undefined)
     assert.equal(allowed.headers['x-content-type-options'], 'nosniff')
 
+    const compatibilityAlias = await app.inject({ method: 'GET', url: '/healthz' })
+    assert.equal(compatibilityAlias.statusCode, 200)
+    assert.deepEqual(compatibilityAlias.json(), { status: 'ok' })
+
     const denied = await app.inject({
       method: 'GET',
-      url: '/healthz',
+      url: '/health',
       headers: { origin: 'https://attacker.example.com' },
     })
     assert.equal(denied.statusCode, 200)

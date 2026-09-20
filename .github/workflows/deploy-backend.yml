@@ -12,35 +12,64 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: cloud-run-production
+  cancel-in-progress: false
+
+env:
+  # These identifiers are not credentials. Repository variables with the same
+  # names can override them if the project is moved later.
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'angeloarc' }}
+  GCP_REGION: ${{ vars.GCP_REGION || 'asia-south2' }}
+  GCP_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT || 'angelo-api@angeloarc.iam.gserviceaccount.com' }}
+  GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER || 'projects/163176147143/locations/global/workloadIdentityPools/github/providers/angeloarc' }}
+  GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT || 'github-deployer@angeloarc.iam.gserviceaccount.com' }}
+  ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://raghav-wd.github.io' }}
+
 jobs:
   deploy:
     name: Deploy to Google Cloud Run
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Authenticate to Google Cloud
         id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
-          # Supports Workload Identity Federation (recommended) or Service Account Key
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Deploy to Cloud Run
+        shell: bash
         run: |
           gcloud run deploy angelo-api \
             --source backend \
-            --project "${{ vars.GCP_PROJECT_ID }}" \
-            --region "${{ vars.GCP_REGION || 'us-central1' }}" \
-            --service-account "${{ vars.GCP_SERVICE_ACCOUNT || format('angelo-api@{0}.iam.gserviceaccount.com', vars.GCP_PROJECT_ID) }}" \
-            --allow-unauthenticated \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" \
             --memory 512Mi \
             --concurrency 20 \
             --max-instances 3 \
-            --set-env-vars "NODE_ENV=production,DATA_STORE=firestore,ALLOWED_ORIGINS=${{ vars.ALLOWED_ORIGINS }}"
+            --set-env-vars "NODE_ENV=production,DATA_STORE=firestore,ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
+            --quiet
+
+      - name: Verify deployed service
+        shell: bash
+        run: |
+          service_url="$(gcloud run services describe angelo-api \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.url)')"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 5 \
+            "$service_url/health"
+          echo "### Cloud Run deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed and verified: $service_url" >> "$GITHUB_STEP_SUMMARY"
