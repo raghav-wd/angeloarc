@@ -89,8 +89,10 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
       if (!element || !media.matches || event.pointerType === 'touch') return
       const target = event.target
       const overInput = target instanceof Element && !!target.closest('input, textarea')
-      const interactive =
-        target instanceof Element && !!target.closest('button, [role="button"], a')
+      const interactiveElement = target instanceof Element
+        ? target.closest('button, [role="button"], a')
+        : null
+      const interactive = Boolean(interactiveElement && interactiveElement.getAttribute('aria-disabled') !== 'true')
 
       document.documentElement.classList.add('custom-cursor-ready')
       element.style.transform = `translate3d(${event.clientX - 3}px, ${event.clientY - 3}px, 0)`

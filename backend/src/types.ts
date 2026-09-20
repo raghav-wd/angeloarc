@@ -1,14 +1,34 @@
-export interface Habit {
+export interface LegacyHabit {
   id: string
   name: string
 }
 
-export interface TrackerState {
+export interface LegacyTrackerState {
   version: 1
   title: string
-  habits: Habit[]
+  habits: LegacyHabit[]
   completions: Record<string, string[]>
   isDemo: boolean
+}
+
+export interface MonthHabit {
+  id: string
+  name: string
+  startedOn: string
+}
+
+export interface TrackerState {
+  version: 2
+  title: string
+  startedOn: string
+  habitPlans: Record<string, MonthHabit[]>
+  completions: Record<string, string[]>
+  isDemo: boolean
+}
+
+export interface SearchSummary {
+  title: string
+  habitCount: number
 }
 
 export interface UserRecord {
@@ -19,6 +39,7 @@ export interface UserRecord {
   createdAt: string
   updatedAt: string
   tracker: TrackerState
+  searchSummary: SearchSummary
 }
 
 export interface SessionRecord {

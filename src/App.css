@@ -380,6 +380,12 @@
   stroke: #2c2c2c;
 }
 
+.day-cell.is-unavailable {
+  stroke: #c4c4c1;
+  stroke-width: 0.55px;
+  cursor: not-allowed;
+}
+
 .day-cell:hover {
   fill: #b8b8b8;
   stroke: #999;
@@ -389,6 +395,11 @@
 .day-cell.is-done:hover {
   fill: #525252;
   stroke: #525252;
+}
+
+.day-cell.is-unavailable:hover {
+  stroke: #a9a9a5;
+  transform: none;
 }
 
 .circular-tracker .day-cell:focus {
@@ -404,6 +415,10 @@
 
 .day-cell.is-done:focus-visible {
   stroke: #939393;
+}
+
+.day-cell.is-unavailable:focus-visible {
+  stroke: #666;
 }
 
 .week-divider {
@@ -618,6 +633,13 @@
 .legend-undone {
   border: 1px solid #b6b6b6;
   background: #fafafa;
+}
+
+.legend-unavailable {
+  border: 1px solid #c4c4c1;
+  background:
+    linear-gradient(135deg, transparent 35%, #aaa 36% 47%, transparent 48%) 0 0 / 4px 4px,
+    #f1f1ef;
 }
 
 .footer-guide > p,
@@ -1064,6 +1086,79 @@
   border-bottom: 1px solid #e8e8e8;
 }
 
+.settings-month-section {
+  padding: 2px 0 20px;
+}
+
+.settings-month-picker {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 13px;
+}
+
+.settings-month-picker > div {
+  min-width: 0;
+  text-align: center;
+}
+
+.settings-month-picker span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 1.45px;
+  color: #999;
+}
+
+.settings-month-picker strong {
+  display: block;
+  overflow: hidden;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-month-arrow {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #dedede;
+  border-radius: 50%;
+  background: #fff;
+  color: #555;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.settings-month-arrow:hover:not(:disabled) {
+  border-color: #292929;
+  background: #292929;
+  color: #fff;
+}
+
+.settings-month-arrow:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.settings-month-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+}
+
+.settings-month-note {
+  margin: 13px auto 0;
+  max-width: 330px;
+  font-size: 8.5px;
+  line-height: 1.55;
+  text-align: center;
+  color: #929292;
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;
@@ -1340,41 +1435,30 @@
 .settings-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-shrink: 0;
-  gap: 20px;
-  padding: 19px 29px;
+  padding: 16px 29px;
   border-top: 1px solid #e6e6e6;
   background: #fcfcfc;
 }
 
-.settings-footer > span {
+.settings-autosave {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-size: 8.5px;
   line-height: 1.5;
   color: #999;
 }
 
-.save-routine {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  gap: 20px;
-  padding: 12px 15px;
-  border: 1px solid #292929;
-  border-radius: 6px;
-  background: #292929;
-  font-size: 10.5px;
-  color: white;
-  transition: background 180ms ease, transform 180ms ease;
+.settings-autosave > svg {
+  flex: 0 0 auto;
+  color: #555;
 }
 
-.save-routine:hover {
-  background: #444;
-}
-
-.save-routine:active {
-  transform: scale(0.98);
+.settings-autosave strong {
+  font-weight: 600;
+  color: #555;
 }
 
 .empty-tracker {
@@ -2518,19 +2602,11 @@
   }
 
   .settings-footer {
-    gap: 12px;
-    padding: 17px 24px;
+    padding: 15px 24px;
   }
 
-  .settings-footer > span {
-    max-width: 104px;
+  .settings-autosave {
     font-size: 8px;
-  }
-
-  .save-routine {
-    gap: 13px;
-    padding: 12px;
-    font-size: 10px;
   }
 
   .success-toast {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, LockKeyhole, Plus } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
@@ -9,14 +9,17 @@ import {
   daysInMonth,
   formatFullDate,
   getDaySectors,
+  getHabitsForMonth,
   getMonthStats,
+  habitAvailableFrom,
+  isHabitAvailableOnDate,
   isFutureDate,
   polarPoint,
 } from '../lib/tracker'
-import type { Habit, Month, TrackerState } from '../lib/tracker'
+import type { Habit, Month, MonthHabit, TrackerState } from '../lib/tracker'
 
 interface HoveredCell {
-  habit: Habit
+  habit: MonthHabit
   day: number
   x: number
   y: number
@@ -27,7 +30,7 @@ interface CircularTrackerProps {
   state: TrackerState
   month: Month
   today: Date
-  onToggle: (day: number, habit: Habit, feedback: CursorFeedback) => boolean
+  onToggle: (day: number, habit: MonthHabit, feedback: CursorFeedback) => boolean
 }
 
 function CellTooltip({
@@ -35,11 +38,15 @@ function CellTooltip({
   month,
   done,
   future,
+  unavailable,
+  availableFrom,
 }: {
   cell: HoveredCell
   month: Month
   done: boolean
   future: boolean
+  unavailable: boolean
+  availableFrom: string
 }) {
   const tooltip = useRef<HTMLDivElement>(null)
 
@@ -76,9 +83,17 @@ function CellTooltip({
       </p>
       <div className="tooltip-habit">
         <span>{cell.habit.name}</span>
-        {future ? <LockKeyhole size={14} strokeWidth={1.5} /> : done ? <Check size={16} strokeWidth={1.7} /> : <Plus size={15} strokeWidth={1.4} />}
+        {future || unavailable ? <LockKeyhole size={14} strokeWidth={1.5} /> : done ? <Check size={16} strokeWidth={1.7} /> : <Plus size={15} strokeWidth={1.4} />}
       </div>
-      <p className="tooltip-action">{future ? "Not yet. Let's show up for today." : done ? 'A promise kept. Click to undo.' : 'Click to keep this promise.'}</p>
+      <p className="tooltip-action">
+        {unavailable
+          ? `Part of your routine from ${new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${availableFrom}T12:00:00Z`))}.`
+          : future
+            ? "Not yet. Let's show up for today."
+            : done
+              ? 'A promise kept. Click to undo.'
+              : 'Click to keep this promise.'}
+      </p>
     </div>,
     document.body,
   )
@@ -187,18 +202,20 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
   const [hovered, setHovered] = useState<HoveredCell | null>(null)
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
   const svg = useRef<SVGSVGElement>(null)
+  const unavailablePatternId = `unavailable-${useId().replaceAll(':', '')}`
   const days = daysInMonth(month)
   const sectors = useMemo(() => getDaySectors(month), [month])
+  const habits = getHabitsForMonth(state, month)
   const stats = getMonthStats(state, month)
   const ringStep = 29
   const ringWidth = 25.5
   const innerRadius = 112
-  const outerRadius = innerRadius + state.habits.length * ringStep
+  const outerRadius = innerRadius + habits.length * ringStep
   const size = Math.max((outerRadius + 35) * 2, 550)
   const center = size / 2
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
 
-  function activateCell(element: SVGPathElement, day: number, habit: Habit, feedback?: CursorFeedback) {
+  function activateCell(element: SVGPathElement, day: number, habit: MonthHabit, feedback?: CursorFeedback) {
     const rect = element.getBoundingClientRect()
     const accepted = onToggle(day, habit, feedback ?? {
       x: rect.x + rect.width / 2,
@@ -227,15 +244,18 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
     switch (event.key) {
       case 'ArrowRight': nextDay = day === days ? 1 : day + 1; break
       case 'ArrowLeft': nextDay = day === 1 ? days : day - 1; break
-      case 'ArrowDown': nextHabit = (habitIndex + 1) % state.habits.length; break
-      case 'ArrowUp': nextHabit = (habitIndex - 1 + state.habits.length) % state.habits.length; break
+      case 'ArrowDown': nextHabit = (habitIndex + 1) % habits.length; break
+      case 'ArrowUp': nextHabit = (habitIndex - 1 + habits.length) % habits.length; break
       case 'Home': nextDay = 1; break
       case 'End': nextDay = days; break
       case 'Enter':
       case ' ':
         event.preventDefault()
         if (!event.repeat) {
-          activateCell(event.currentTarget, day, state.habits[habitIndex])
+          const habit = habits[habitIndex]
+          if (isHabitAvailableOnDate(state, month, day, habit.id)) {
+            activateCell(event.currentTarget, day, habit)
+          }
         }
         return
       case 'Escape':
@@ -258,14 +278,20 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
         aria-label={`${new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2024, month.month))} ${month.year} habit tracker`}
         aria-describedby="tracker-keyboard-help"
       >
+        <defs>
+          <pattern id={unavailablePatternId} width="8" height="6" patternUnits="userSpaceOnUse">
+            <rect width="8" height="6" fill="#f1f1ef" />
+            <path d="M-2 4 L0 2 L2 4 L4 2 L6 4 L8 2 L10 4" fill="none" stroke="#b9b9b6" strokeWidth="0.8" />
+          </pattern>
+        </defs>
         <text className="habit-list-heading" x={center - 223} y={center - outerRadius - 16}>
           THE DAILY RITUALS
         </text>
         <text className="habit-list-count" x={center - 18} y={center - outerRadius - 16} textAnchor="end">
-          {String(state.habits.length).padStart(2, '0')}
+          {String(habits.length).padStart(2, '0')}
         </text>
 
-        {state.habits.map((habit, index) => (
+        {habits.map((habit, index) => (
           <HabitLabel
             key={habit.id}
             habit={habit}
@@ -294,7 +320,7 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
           )
         })}
 
-        {state.habits.map((habit, habitIndex) => {
+        {habits.map((habit, habitIndex) => {
           const outer = outerRadius - habitIndex * ringStep
           const inner = outer - ringWidth
           return (
@@ -304,18 +330,21 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
                 const active = hovered?.habit.id === habit.id && hovered.day === sector.day
                 const isToday = isCurrentMonth && sector.day === today.getDate()
                 const future = isFutureDate(month, sector.day, today)
+                const unavailable = !isHabitAvailableOnDate(state, month, sector.day, habit.id)
+                const availableFrom = habitAvailableFrom(state, habit)
                 return (
                   <path
                     key={sector.day}
                     d={annularSectorPath(center, center, inner, outer, sector.startAngle, sector.endAngle)}
-                    className={`day-cell ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''}`}
+                    className={`day-cell ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''} ${unavailable ? 'is-unavailable' : ''}`}
+                    style={unavailable ? { fill: `url(#${unavailablePatternId})` } : undefined}
                     data-cell={`${habitIndex}-${sector.day}`}
                     data-date={dateKey(month, sector.day)}
                     role="button"
                     tabIndex={focused.habit === habitIndex && focused.day === sector.day ? 0 : -1}
-                    aria-label={`${habit.name}, ${formatFullDate(month, sector.day)}`}
+                    aria-label={`${habit.name}, ${formatFullDate(month, sector.day)}${unavailable ? `, unavailable until ${availableFrom}` : ''}`}
                     aria-pressed={done}
-                    aria-disabled={future}
+                    aria-disabled={future || unavailable}
                     aria-describedby={active ? 'cell-tooltip' : undefined}
                     onPointerEnter={(event) => {
                       if (event.pointerType === 'touch') return
@@ -337,7 +366,7 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
                       const feedback = nativeEvent instanceof PointerEvent && nativeEvent.pointerType
                         ? { x: event.clientX, y: event.clientY, followPointer: nativeEvent.pointerType === 'mouse' }
                         : undefined
-                      activateCell(event.currentTarget, sector.day, habit, feedback)
+                      if (!unavailable) activateCell(event.currentTarget, sector.day, habit, feedback)
                     }}
                   />
                 )
@@ -363,7 +392,8 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
       <p id="tracker-keyboard-help" className="sr-only">
         Use arrow keys to move between days and habits. Press Enter or Space to mark a habit done or undone.
         Future days are locked until their local calendar date.
-        Consistency is the percentage of all check-ins completed in the displayed month.
+        Zig-zag cells predate the tracker or habit and cannot be checked off.
+        Consistency is completed check-ins divided by check-ins available in the displayed month.
       </p>
       {hovered && (
         <CellTooltip
@@ -371,6 +401,8 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
           month={month}
           done={state.completions[dateKey(month, hovered.day)]?.includes(hovered.habit.id) ?? false}
           future={isFutureDate(month, hovered.day, today)}
+          unavailable={!isHabitAvailableOnDate(state, month, hovered.day, hovered.habit.id)}
+          availableFrom={habitAvailableFrom(state, hovered.habit)}
         />
       )}
     </>

@@ -8,12 +8,25 @@ export interface Habit {
   name: string;
 }
 
+export interface MonthHabit extends Habit {
+  startedOn: string;
+}
+
 export interface Month {
   year: number;
   month: number;
 }
 
 export interface TrackerState {
+  version: 2;
+  title: string;
+  startedOn: string;
+  habitPlans: Record<string, MonthHabit[]>;
+  completions: Record<string, string[]>;
+  isDemo: boolean;
+}
+
+interface LegacyTrackerState {
   version: 1;
   title: string;
   habits: Habit[];
@@ -35,6 +48,13 @@ export class FutureDateError extends Error {
   }
 }
 
+export class UnavailableDateError extends Error {
+  constructor() {
+    super('This habit was not part of your routine on that date.');
+    this.name = 'UnavailableDateError';
+  }
+}
+
 const STARTER_HABITS: readonly Habit[] = [
   { id: 'move', name: 'Move your body' },
   { id: 'read', name: 'Read 10 pages' },
@@ -43,6 +63,8 @@ const STARTER_HABITS: readonly Habit[] = [
   { id: 'mind', name: 'Quiet your mind' },
   { id: 'sleep', name: 'Sleep 8 hours' },
 ];
+
+const LEGACY_START_DATE = '0000-01-01';
 
 const fullDateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
@@ -105,16 +127,126 @@ export function dateKey(month: Month, day: number): string {
   return `${monthKey(month)}-${String(day).padStart(2, '0')}`;
 }
 
-export function isFutureDate(month: Month, day: number, now: Date = new Date()): boolean {
+export function localDateKey(now: Date = new Date()): string {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     throw new Error('The current date must be a valid Date.');
   }
-  const today = { year: now.getFullYear(), month: now.getMonth() };
-  return dateKey(month, day) > dateKey(today, now.getDate());
+  return dateKey({ year: now.getFullYear(), month: now.getMonth() }, now.getDate());
+}
+
+export function isFutureDate(month: Month, day: number, now: Date = new Date()): boolean {
+  return dateKey(month, day) > localDateKey(now);
 }
 
 export function formatFullDate(month: Month, day: number): string {
   return fullDateFormatter.format(new Date(`${dateKey(month, day)}T12:00:00Z`));
+}
+
+function dateParts(value: string): { month: Month; day: number } | null {
+  if (typeof value !== 'string' || value.length !== 10) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const month = { year: Number(match[1]), month: Number(match[2]) - 1 };
+  const day = Number(match[3]);
+  try {
+    return day >= 1 && day <= daysInMonth(month) ? { month, day } : null;
+  } catch {
+    return null;
+  }
+}
+
+function isValidDateKey(value: string): boolean {
+  return dateParts(value) !== null;
+}
+
+function isValidMonthKey(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12;
+}
+
+function normalizeHabitInputs(value: unknown, ErrorType: new (message: string) => Error): Habit[] {
+  if (!Array.isArray(value) || value.length > MAX_HABITS) {
+    throw new ErrorType(`Habits must be an array containing at most ${MAX_HABITS} habits.`);
+  }
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  return Array.from(value, (candidate: unknown) => {
+    if (!isRecord(candidate)) throw new ErrorType('Each habit must contain an id and a name.');
+    if (typeof candidate.id !== 'string' || !candidate.id.trim() || candidate.id !== candidate.id.trim()) {
+      throw new ErrorType('Habit IDs must be nonempty, trimmed strings.');
+    }
+    if (ids.has(candidate.id)) throw new ErrorType('Habit IDs must be distinct.');
+    if (typeof candidate.name !== 'string') throw new ErrorType('Habit names must be strings.');
+    const name = candidate.name.trim();
+    if (!name || name.length > MAX_HABIT_NAME_LENGTH) {
+      throw new ErrorType(`Habit names must contain 1 to ${MAX_HABIT_NAME_LENGTH} characters.`);
+    }
+    const foldedName = name.toLowerCase();
+    if (names.has(foldedName)) {
+      throw new ErrorType('Habit names must be distinct, ignoring case.');
+    }
+    ids.add(candidate.id);
+    names.add(foldedName);
+    return { id: candidate.id, name };
+  });
+}
+
+function validateLegacyHabits(value: unknown): Habit[] {
+  const habits = normalizeHabitInputs(value, StorageValidationError);
+  if (!(value as unknown[]).every((habit) => isRecord(habit) && hasExactFields(habit, ['id', 'name']))) {
+    throw new StorageValidationError('Each legacy habit must contain exactly an id and a name.');
+  }
+  if (!(value as Array<Record<string, unknown>>).every((habit) => habit.name === String(habit.name).trim())) {
+    throw new StorageValidationError('Stored habit names must be trimmed.');
+  }
+  return habits;
+}
+
+function validateHabitPlan(value: unknown, planMonth: string): MonthHabit[] {
+  const habits = normalizeHabitInputs(value, StorageValidationError);
+  return habits.map((habit, index) => {
+    const candidate = (value as unknown[])[index];
+    if (!isRecord(candidate) || !hasExactFields(candidate, ['id', 'name', 'startedOn'])) {
+      throw new StorageValidationError('Each planned habit must contain exactly id, name, and startedOn.');
+    }
+    if (candidate.name !== habit.name) {
+      throw new StorageValidationError('Stored habit names must be trimmed.');
+    }
+    if (typeof candidate.startedOn !== 'string' || !isValidDateKey(candidate.startedOn)) {
+      throw new StorageValidationError('Habit startedOn values must be real YYYY-MM-DD dates.');
+    }
+    if (candidate.startedOn.slice(0, 7) > planMonth) {
+      throw new StorageValidationError('A habit cannot appear in a plan before its start month.');
+    }
+    return { ...habit, startedOn: candidate.startedOn };
+  });
+}
+
+export function getHabitsForMonth(state: TrackerState, month: Month): MonthHabit[] {
+  const key = monthKey(month);
+  if (key < state.startedOn.slice(0, 7)) return [];
+  const planKey = Object.keys(state.habitPlans)
+    .filter((candidate) => candidate <= key)
+    .sort()
+    .at(-1);
+  return planKey ? state.habitPlans[planKey].map((habit) => ({ ...habit })) : [];
+}
+
+export function habitAvailableFrom(state: TrackerState, habit: MonthHabit): string {
+  return state.startedOn > habit.startedOn ? state.startedOn : habit.startedOn;
+}
+
+export function isHabitAvailableOnDate(
+  state: TrackerState,
+  month: Month,
+  day: number,
+  habitId: string,
+): boolean {
+  const key = dateKey(month, day);
+  const habit = getHabitsForMonth(state, month).find((candidate) => candidate.id === habitId);
+  return Boolean(habit && key >= habitAvailableFrom(state, habit));
 }
 
 export function createInitialState(now: Date = new Date()): TrackerState {
@@ -123,7 +255,9 @@ export function createInitialState(now: Date = new Date()): TrackerState {
   }
   const month = { year: now.getFullYear(), month: now.getMonth() };
   validateMonth(month);
-  const habits = STARTER_HABITS.map((habit) => ({ ...habit }));
+  const planMonth = monthKey(month);
+  const sampleStart = dateKey(month, 1);
+  const habits = STARTER_HABITS.map((habit) => ({ ...habit, startedOn: sampleStart }));
   const completions: Record<string, string[]> = {};
   let seed = month.year * 12 + month.month + 1;
 
@@ -132,21 +266,35 @@ export function createInitialState(now: Date = new Date()): TrackerState {
     const completed: string[] = [];
     for (const habit of habits) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      if (seed / 0x100000000 < 0.8) {
-        completed.push(habit.id);
-      }
+      if (seed / 0x100000000 < 0.8) completed.push(habit.id);
     }
-    if (completed.length > 0) {
-      completions[dateKey(month, day)] = completed;
-    }
+    if (completed.length > 0) completions[dateKey(month, day)] = completed;
   }
 
   return {
-    version: 1,
+    version: 2,
     title: 'No Excuses Grind',
-    habits,
+    startedOn: sampleStart,
+    habitPlans: { [planMonth]: habits },
     completions,
     isDemo: true,
+  };
+}
+
+function beginRealTracker(state: TrackerState, now: Date): TrackerState {
+  const currentMonth = { year: now.getFullYear(), month: now.getMonth() };
+  const startedOn = localDateKey(now);
+  const habits = getHabitsForMonth(state, currentMonth).map((habit) => ({
+    id: habit.id,
+    name: habit.name,
+    startedOn,
+  }));
+  return {
+    ...state,
+    startedOn,
+    habitPlans: { [monthKey(currentMonth)]: habits },
+    completions: {},
+    isDemo: false,
   };
 }
 
@@ -155,21 +303,28 @@ export function getMonthStats(
   month: Month,
 ): { completed: number; total: number; percentage: number } {
   const dayCount = daysInMonth(month);
-  // Consistency measures progress toward the whole month, including days still ahead.
-  const total = dayCount * state.habits.length;
-  if (total === 0) {
-    return { completed: 0, total: 0, percentage: 0 };
-  }
-
-  const knownIds = new Set(state.habits.map((habit) => habit.id));
+  const habits = getHabitsForMonth(state, month);
+  const key = monthKey(month);
+  let total = 0;
   let completed = 0;
-  for (let day = 1; day <= dayCount; day += 1) {
-    const ids = new Set(state.completions[dateKey(month, day)] ?? []);
-    for (const id of ids) {
-      if (knownIds.has(id)) completed += 1;
+
+  for (const habit of habits) {
+    const availableFrom = habitAvailableFrom(state, habit);
+    const availableMonth = availableFrom.slice(0, 7);
+    if (availableMonth > key) continue;
+    const firstDay = availableMonth === key ? Number(availableFrom.slice(8, 10)) : 1;
+    total += dayCount - firstDay + 1;
+    for (let day = firstDay; day <= dayCount; day += 1) {
+      const ids = state.completions[dateKey(month, day)] ?? [];
+      if (ids.includes(habit.id)) completed += 1;
     }
   }
-  return { completed, total, percentage: Math.round((completed / total) * 100) };
+
+  return {
+    completed,
+    total,
+    percentage: total === 0 ? 0 : Math.round((completed / total) * 100),
+  };
 }
 
 export function toggleCompletion(
@@ -180,90 +335,181 @@ export function toggleCompletion(
   now: Date = new Date(),
 ): TrackerState {
   const key = dateKey(month, day);
-  if (!state.habits.some((habit) => habit.id === habitId)) {
-    throw new Error(`Cannot toggle an unknown habit ID: "${habitId}".`);
+  if (!getHabitsForMonth(state, month).some((habit) => habit.id === habitId)
+    || !isHabitAvailableOnDate(state, month, day, habitId)) {
+    throw new UnavailableDateError();
   }
-  if (isFutureDate(month, day, now)) {
-    throw new FutureDateError();
-  }
+  if (isFutureDate(month, day, now)) throw new FutureDateError();
 
   const ids = new Set(state.completions[key] ?? []);
-  if (ids.has(habitId)) {
-    ids.delete(habitId);
-  } else {
-    ids.add(habitId);
-  }
+  if (ids.has(habitId)) ids.delete(habitId);
+  else ids.add(habitId);
   const completions = { ...state.completions };
-  if (ids.size === 0) {
-    delete completions[key];
-  } else {
-    completions[key] = [...ids];
-  }
+  if (ids.size === 0) delete completions[key];
+  else completions[key] = [...ids];
   return { ...state, completions };
 }
 
-function validateHabits(
-  value: unknown,
-  ErrorType: new (message: string) => Error,
-  requireTrimmedNames = false,
-): Habit[] {
-  if (!Array.isArray(value) || value.length > MAX_HABITS) {
-    throw new ErrorType(`Habits must be an array containing at most ${MAX_HABITS} habits.`);
+function knownHabitStarts(state: TrackerState): Map<string, string> {
+  const starts = new Map<string, string>();
+  for (const plan of Object.values(state.habitPlans)) {
+    for (const habit of plan) starts.set(habit.id, habit.startedOn);
   }
+  return starts;
+}
 
-  const ids = new Set<string>();
-  const names = new Set<string>();
-  return Array.from(value, (habit: unknown) => {
-    if (!isRecord(habit) || !hasExactFields(habit, ['id', 'name'])) {
-      throw new ErrorType('Each habit must contain exactly an id and a name.');
+export function updateHabitPlan(
+  state: TrackerState,
+  month: Month,
+  nextHabits: Habit[],
+  now: Date = new Date(),
+): TrackerState {
+  const normalized = normalizeHabitInputs(nextHabits, Error);
+  const base = state.isDemo ? beginRealTracker(state, now) : state;
+  const planMonth = monthKey(month);
+  if (planMonth < base.startedOn.slice(0, 7)) {
+    throw new Error('A routine cannot be changed before the tracker start month.');
+  }
+  const today = { year: now.getFullYear(), month: now.getMonth() };
+  const newHabitStart = planMonth === monthKey(today) ? localDateKey(now) : dateKey(month, 1);
+  const existingStarts = knownHabitStarts(base);
+  const plan = normalized.map((habit) => ({
+    ...habit,
+    startedOn: existingStarts.get(habit.id) ?? newHabitStart,
+  }));
+  const habitPlans = { ...base.habitPlans, [planMonth]: plan };
+  const provisional = { ...base, habitPlans };
+  const completions: Record<string, string[]> = {};
+
+  for (const [key, ids] of Object.entries(base.completions)) {
+    const parts = dateParts(key);
+    if (!parts) continue;
+    const retained = ids.filter((id) => isHabitAvailableOnDate(provisional, parts.month, parts.day, id));
+    if (retained.length > 0) completions[key] = retained;
+  }
+  return { ...provisional, completions };
+}
+
+export function clearTrackerProgress(state: TrackerState, now: Date = new Date()): TrackerState {
+  if (state.isDemo) return beginRealTracker(state, now);
+  return { ...state, completions: {}, isDemo: false };
+}
+
+function migrateLegacyTracker(legacy: LegacyTrackerState): TrackerState {
+  return {
+    version: 2,
+    title: legacy.title,
+    startedOn: LEGACY_START_DATE,
+    habitPlans: {
+      '0000-01': legacy.habits.map((habit) => ({ ...habit, startedOn: LEGACY_START_DATE })),
+    },
+    completions: legacy.completions,
+    isDemo: legacy.isDemo,
+  };
+}
+
+function parseLegacyTracker(parsed: Record<string, unknown>): TrackerState {
+  if (!hasExactFields(parsed, ['version', 'title', 'habits', 'completions', 'isDemo'])) {
+    throw new StorageValidationError(
+      'Legacy tracker data must contain exactly version, title, habits, completions, and isDemo.',
+    );
+  }
+  if (typeof parsed.title !== 'string' || parsed.title.length > MAX_TITLE_LENGTH) {
+    throw new StorageValidationError(`Tracker title must be a string of at most ${MAX_TITLE_LENGTH} characters.`);
+  }
+  if (typeof parsed.isDemo !== 'boolean') throw new StorageValidationError('The isDemo flag must be a boolean.');
+  const habits = validateLegacyHabits(parsed.habits);
+  const knownIds = new Set(habits.map((habit) => habit.id));
+  if (!isRecord(parsed.completions)) throw new StorageValidationError('Completions must be a date-keyed object.');
+  const completions: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(parsed.completions)) {
+    if (!isValidDateKey(key)) {
+      throw new StorageValidationError(`Invalid completion date: "${key}". Use a real yyyy-mm-dd date.`);
     }
-    if (typeof habit.id !== 'string' || !habit.id.trim() || habit.id !== habit.id.trim()) {
-      throw new ErrorType('Habit IDs must be nonempty, trimmed strings.');
+    if (!Array.isArray(value)) throw new StorageValidationError(`Completions for ${key} must be an array of habit IDs.`);
+    const uniqueIds = new Set<string>();
+    for (const id of value) {
+      if (typeof id !== 'string' || !knownIds.has(id)) {
+        throw new StorageValidationError(`Completions for ${key} contain an unknown habit ID.`);
+      }
+      if (uniqueIds.has(id)) throw new StorageValidationError(`Completions for ${key} contain a duplicate habit ID.`);
+      uniqueIds.add(id);
     }
-    if (ids.has(habit.id)) {
-      throw new ErrorType('Habit IDs must be distinct.');
-    }
-    if (typeof habit.name !== 'string') {
-      throw new ErrorType('Habit names must be strings.');
-    }
-    const name = habit.name.trim();
-    if (!name || name.length > MAX_HABIT_NAME_LENGTH) {
-      throw new ErrorType(`Habit names must contain 1 to ${MAX_HABIT_NAME_LENGTH} characters.`);
-    }
-    if (requireTrimmedNames && name !== habit.name) {
-      throw new ErrorType('Stored habit names must be trimmed.');
-    }
-    const foldedName = name.toLowerCase();
-    if (names.has(foldedName)) {
-      throw new ErrorType('Habit names must be distinct, ignoring case.');
-    }
-    ids.add(habit.id);
-    names.add(foldedName);
-    return { id: habit.id, name };
+    completions[key] = [...uniqueIds];
+  }
+  return migrateLegacyTracker({
+    version: 1,
+    title: parsed.title,
+    habits,
+    completions,
+    isDemo: parsed.isDemo,
   });
 }
 
-export function reconcileHabits(state: TrackerState, habits: Habit[]): TrackerState {
-  const nextHabits = validateHabits(habits, Error);
-  const knownIds = new Set(nextHabits.map((habit) => habit.id));
-  const completions: Record<string, string[]> = {};
-  for (const [key, ids] of Object.entries(state.completions)) {
-    const retained = [...new Set(ids.filter((id) => knownIds.has(id)))];
-    if (retained.length > 0) {
-      completions[key] = retained;
-    }
+function parseTrackerV2(parsed: Record<string, unknown>): TrackerState {
+  if (!hasExactFields(parsed, ['version', 'title', 'startedOn', 'habitPlans', 'completions', 'isDemo'])) {
+    throw new StorageValidationError(
+      'Tracker data must contain exactly version, title, startedOn, habitPlans, completions, and isDemo.',
+    );
   }
-  return { ...state, habits: nextHabits, completions };
-}
+  if (typeof parsed.title !== 'string' || parsed.title.length > MAX_TITLE_LENGTH) {
+    throw new StorageValidationError(`Tracker title must be a string of at most ${MAX_TITLE_LENGTH} characters.`);
+  }
+  if (typeof parsed.startedOn !== 'string' || !isValidDateKey(parsed.startedOn)) {
+    throw new StorageValidationError('Tracker startedOn must be a real YYYY-MM-DD date.');
+  }
+  if (typeof parsed.isDemo !== 'boolean') throw new StorageValidationError('The isDemo flag must be a boolean.');
+  if (!isRecord(parsed.habitPlans)) throw new StorageValidationError('Habit plans must be a month-keyed object.');
+  const startMonth = parsed.startedOn.slice(0, 7);
+  if (!Object.hasOwn(parsed.habitPlans, startMonth)) {
+    throw new StorageValidationError('Habit plans must contain a baseline plan for the tracker start month.');
+  }
+  const habitPlans: Record<string, MonthHabit[]> = {};
+  const startsById = new Map<string, string>();
+  for (const [key, value] of Object.entries(parsed.habitPlans)) {
+    if (!isValidMonthKey(key) || key < startMonth) {
+      throw new StorageValidationError(`Invalid habit plan month: "${key}".`);
+    }
+    const plan = validateHabitPlan(value, key);
+    for (const habit of plan) {
+      if (habit.startedOn < parsed.startedOn) {
+        throw new StorageValidationError('Habit start dates cannot precede the tracker start date.');
+      }
+      const previousStart = startsById.get(habit.id);
+      if (previousStart && previousStart !== habit.startedOn) {
+        throw new StorageValidationError('A habit ID must keep the same start date across monthly plans.');
+      }
+      startsById.set(habit.id, habit.startedOn);
+    }
+    habitPlans[key] = plan;
+  }
 
-function isValidDateKey(key: string): boolean {
-  if (key.length !== 10) return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
-  if (!match) return false;
-  const month = { year: Number(match[1]), month: Number(match[2]) - 1 };
-  const day = Number(match[3]);
-  return month.month >= 0 && month.month <= 11
-    && day >= 1 && day <= daysInMonth(month);
+  const state: TrackerState = {
+    version: 2,
+    title: parsed.title,
+    startedOn: parsed.startedOn,
+    habitPlans,
+    completions: {},
+    isDemo: parsed.isDemo,
+  };
+  if (!isRecord(parsed.completions)) throw new StorageValidationError('Completions must be a date-keyed object.');
+  for (const [key, value] of Object.entries(parsed.completions)) {
+    const parts = dateParts(key);
+    if (!parts) {
+      throw new StorageValidationError(`Invalid completion date: "${key}". Use a real yyyy-mm-dd date.`);
+    }
+    if (!Array.isArray(value)) throw new StorageValidationError(`Completions for ${key} must be an array of habit IDs.`);
+    const uniqueIds = new Set<string>();
+    for (const id of value) {
+      if (typeof id !== 'string' || !isHabitAvailableOnDate(state, parts.month, parts.day, id)) {
+        throw new StorageValidationError(`Completions for ${key} contain an unavailable habit ID.`);
+      }
+      if (uniqueIds.has(id)) throw new StorageValidationError(`Completions for ${key} contain a duplicate habit ID.`);
+      uniqueIds.add(id);
+    }
+    state.completions[key] = [...uniqueIds];
+  }
+  return state;
 }
 
 export function parseStoredState(value: string): TrackerState {
@@ -274,60 +520,13 @@ export function parseStoredState(value: string): TrackerState {
   try {
     parsed = JSON.parse(value);
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new StorageValidationError('Stored tracker data is not valid JSON.');
-    }
+    if (error instanceof SyntaxError) throw new StorageValidationError('Stored tracker data is not valid JSON.');
     throw error;
   }
-
-  if (!isRecord(parsed)
-    || !hasExactFields(parsed, ['version', 'title', 'habits', 'completions', 'isDemo'])) {
-    throw new StorageValidationError(
-      'Stored tracker data must contain exactly version, title, habits, completions, and isDemo.',
-    );
-  }
-  if (parsed.version !== 1) {
-    throw new StorageValidationError('Stored tracker version must be 1.');
-  }
-  if (typeof parsed.title !== 'string' || parsed.title.length > MAX_TITLE_LENGTH) {
-    throw new StorageValidationError(`Tracker title must be a string of at most ${MAX_TITLE_LENGTH} characters.`);
-  }
-  if (typeof parsed.isDemo !== 'boolean') {
-    throw new StorageValidationError('The isDemo flag must be a boolean.');
-  }
-  const habits = validateHabits(parsed.habits, StorageValidationError, true);
-  const knownIds = new Set(habits.map((habit) => habit.id));
-  if (!isRecord(parsed.completions)) {
-    throw new StorageValidationError('Completions must be a date-keyed object.');
-  }
-
-  const completions: Record<string, string[]> = {};
-  for (const [key, ids] of Object.entries(parsed.completions)) {
-    if (!isValidDateKey(key)) {
-      throw new StorageValidationError(`Invalid completion date: "${key}". Use a real yyyy-mm-dd date.`);
-    }
-    if (!Array.isArray(ids)) {
-      throw new StorageValidationError(`Completions for ${key} must be an array of habit IDs.`);
-    }
-    const uniqueIds = new Set<string>();
-    for (const id of ids) {
-      if (typeof id !== 'string' || !knownIds.has(id)) {
-        throw new StorageValidationError(`Completions for ${key} contain an unknown habit ID.`);
-      }
-      if (uniqueIds.has(id)) {
-        throw new StorageValidationError(`Completions for ${key} contain a duplicate habit ID.`);
-      }
-      uniqueIds.add(id);
-    }
-    completions[key] = [...uniqueIds];
-  }
-  return {
-    version: 1,
-    title: parsed.title,
-    habits,
-    completions,
-    isDemo: parsed.isDemo,
-  };
+  if (!isRecord(parsed)) throw new StorageValidationError('Stored tracker data must be an object.');
+  if (parsed.version === 1) return parseLegacyTracker(parsed);
+  if (parsed.version === 2) return parseTrackerV2(parsed);
+  throw new StorageValidationError('Stored tracker version must be 1 or 2.');
 }
 
 export function polarPoint(

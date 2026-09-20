@@ -1,7 +1,14 @@
 import { Firestore, Timestamp } from '@google-cloud/firestore'
 import { SessionCollisionError, UsernameTakenError } from './errors.js'
 import type { DataStore } from './store.js'
-import type { ProfileSummaryRecord, SessionRecord, TrackerState, UserRecord } from './types.js'
+import { trackerSearchSummary, validateTracker } from './tracker.js'
+import type {
+  ProfileSummaryRecord,
+  SearchSummary,
+  SessionRecord,
+  TrackerState,
+  UserRecord,
+} from './types.js'
 
 interface FirestoreStoreOptions {
   projectId?: string
@@ -21,6 +28,7 @@ function isoString(value: unknown): string {
 }
 
 function userFromData(data: Record<string, unknown>): UserRecord {
+  const tracker = validateTracker(data.tracker)
   return {
     username: data.username as string,
     passwordHash: data.passwordHash as string,
@@ -28,7 +36,8 @@ function userFromData(data: Record<string, unknown>): UserRecord {
     isPublic: data.isPublic as boolean,
     createdAt: isoString(data.createdAt),
     updatedAt: isoString(data.updatedAt),
-    tracker: data.tracker as TrackerState,
+    tracker,
+    searchSummary: searchSummaryFromData(data.searchSummary) ?? trackerSearchSummary(tracker),
   }
 }
 
@@ -41,20 +50,39 @@ function sessionFromData(data: Record<string, unknown>, tokenHash: string): Sess
   }
 }
 
-function profileSummaryFromData(data: Record<string, unknown>): ProfileSummaryRecord {
-  const tracker = data.tracker
-  if (typeof tracker !== 'object' || tracker === null || Array.isArray(tracker)) {
-    throw new Error('Firestore profile summary contains invalid tracker data.')
+function searchSummaryFromData(value: unknown): SearchSummary | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const summary = value as Record<string, unknown>
+  if (typeof summary.title !== 'string'
+    || typeof summary.habitCount !== 'number'
+    || !Number.isInteger(summary.habitCount)
+    || summary.habitCount < 0
+    || summary.habitCount > 9) {
+    return null
   }
-  const title = (tracker as Record<string, unknown>).title
-  const habits = (tracker as Record<string, unknown>).habits
-  if (typeof data.username !== 'string' || typeof title !== 'string' || !Array.isArray(habits)) {
+  return { title: summary.title, habitCount: summary.habitCount }
+}
+
+function profileSummaryFromData(data: Record<string, unknown>): ProfileSummaryRecord {
+  if (typeof data.username !== 'string') {
     throw new Error('Firestore profile summary contains invalid fields.')
+  }
+  let summary = searchSummaryFromData(data.searchSummary)
+  if (!summary) {
+    const tracker = data.tracker
+    if (typeof tracker !== 'object' || tracker === null || Array.isArray(tracker)) {
+      throw new Error('Firestore profile summary is missing.')
+    }
+    const legacyTitle = (tracker as Record<string, unknown>).title
+    const legacyHabits = (tracker as Record<string, unknown>).habits
+    if (typeof legacyTitle !== 'string' || !Array.isArray(legacyHabits)) {
+      throw new Error('Firestore profile summary contains invalid legacy fields.')
+    }
+    summary = { title: legacyTitle, habitCount: legacyHabits.length }
   }
   return {
     username: data.username,
-    title,
-    habitCount: habits.length,
+    ...summary,
     updatedAt: isoString(data.updatedAt),
   }
 }
@@ -82,6 +110,7 @@ export class FirestoreStore implements DataStore {
     try {
       await this.#users.doc(user.username).create({
         ...user,
+        searchSummary: trackerSearchSummary(user.tracker),
         createdAt: timestamp(user.createdAt),
         updatedAt: timestamp(user.updatedAt),
       })
@@ -100,7 +129,11 @@ export class FirestoreStore implements DataStore {
   }
 
   async updateTracker(username: string, tracker: TrackerState, updatedAt: string): Promise<void> {
-    await this.#users.doc(username).update({ tracker, updatedAt: timestamp(updatedAt) })
+    await this.#users.doc(username).update({
+      tracker,
+      searchSummary: trackerSearchSummary(tracker),
+      updatedAt: timestamp(updatedAt),
+    })
   }
 
   async updateVisibility(
@@ -147,7 +180,7 @@ export class FirestoreStore implements DataStore {
       .startAt(prefix)
       .endAt(`${prefix}\uf8ff`)
       .limit(limit)
-      .select('username', 'tracker.title', 'tracker.habits', 'updatedAt')
+      .select('username', 'searchSummary', 'tracker.title', 'tracker.habits', 'updatedAt')
       .get()
     return snapshot.docs.map((document) => profileSummaryFromData(document.data()))
   }

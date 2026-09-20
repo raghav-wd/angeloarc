@@ -1,6 +1,7 @@
 import { SessionCollisionError, UsernameTakenError } from './errors.js'
 import type { DataStore } from './store.js'
 import type { ProfileSummaryRecord, SessionRecord, TrackerState, UserRecord } from './types.js'
+import { trackerSearchSummary } from './tracker.js'
 
 function clone<T>(value: T): T {
   return structuredClone(value)
@@ -12,7 +13,10 @@ export class MemoryStore implements DataStore {
 
   async createUser(user: UserRecord): Promise<void> {
     if (this.#users.has(user.username)) throw new UsernameTakenError()
-    this.#users.set(user.username, clone(user))
+    this.#users.set(user.username, clone({
+      ...user,
+      searchSummary: trackerSearchSummary(user.tracker),
+    }))
   }
 
   async getUser(username: string): Promise<UserRecord | null> {
@@ -23,7 +27,12 @@ export class MemoryStore implements DataStore {
   async updateTracker(username: string, tracker: TrackerState, updatedAt: string): Promise<void> {
     const user = this.#users.get(username)
     if (!user) return
-    this.#users.set(username, { ...user, tracker: clone(tracker), updatedAt })
+    this.#users.set(username, {
+      ...user,
+      tracker: clone(tracker),
+      searchSummary: trackerSearchSummary(tracker),
+      updatedAt,
+    })
   }
 
   async updateVisibility(
@@ -59,8 +68,8 @@ export class MemoryStore implements DataStore {
       .slice(0, limit)
       .map((user) => ({
         username: user.username,
-        title: user.tracker.title,
-        habitCount: user.tracker.habits.length,
+        title: user.searchSummary.title,
+        habitCount: user.searchSummary.habitCount,
         updatedAt: user.updatedAt,
       }))
   }

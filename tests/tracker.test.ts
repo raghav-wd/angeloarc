@@ -7,33 +7,49 @@ import {
   STORAGE_KEY,
   FutureDateError,
   StorageValidationError,
+  UnavailableDateError,
   annularSectorPath,
+  clearTrackerProgress,
   createInitialState,
   dateKey,
   daysInMonth,
   formatFullDate,
   getDaySectors,
+  getHabitsForMonth,
   getMonthStats,
+  habitAvailableFrom,
   isFutureDate,
+  isHabitAvailableOnDate,
   monthKey,
   parseStoredState,
   polarPoint,
-  reconcileHabits,
   shiftMonth,
   toggleCompletion,
+  updateHabitPlan,
   type Habit,
   type Month,
+  type MonthHabit,
   type TrackerState,
 } from '../src/lib/tracker.ts';
 
+const august: Month = { year: 2026, month: 7 };
 const september: Month = { year: 2026, month: 8 };
+const october: Month = { year: 2026, month: 9 };
+const septemberNineteenth = new Date(2026, 8, 19, 12);
 const endOfSeptember = new Date(2026, 8, 30, 12);
+
+function monthHabit(id: string, name: string, startedOn = '2026-08-01'): MonthHabit {
+  return { id, name, startedOn };
+}
 
 function stateWith(overrides: Partial<TrackerState> = {}): TrackerState {
   return {
-    version: 1,
+    version: 2,
     title: 'My routine',
-    habits: [{ id: 'move', name: 'Move' }, { id: 'read', name: 'Read' }],
+    startedOn: '2026-08-01',
+    habitPlans: {
+      '2026-08': [monthHabit('move', 'Move'), monthHabit('read', 'Read')],
+    },
     completions: {},
     isDemo: false,
     ...overrides,
@@ -77,7 +93,7 @@ describe('calendar helpers and constants', () => {
     });
   }
 
-  it('shifts in either direction across month and year boundaries without mutation', () => {
+  it('shifts across month and year boundaries without mutation', () => {
     const month = deepFreeze({ year: 2026, month: 11 });
     assert.deepEqual(shiftMonth(month, 1), { year: 2027, month: 0 });
     assert.deepEqual(shiftMonth({ year: 2026, month: 0 }, -1), { year: 2025, month: 11 });
@@ -88,20 +104,17 @@ describe('calendar helpers and constants', () => {
     assert.deepEqual(month, { year: 2026, month: 11 });
   });
 
-  it('formats zero-based months and four-digit years without the Date year-1900 offset', () => {
+  it('formats zero-based months, low years, and full dates correctly', () => {
     assert.equal(monthKey(september), '2026-09');
     assert.equal(monthKey({ year: 9, month: 0 }), '0009-01');
     assert.equal(dateKey({ year: 0, month: 1 }, 29), '0000-02-29');
     assert.equal(dateKey({ year: 99, month: 11 }, 31), '0099-12-31');
     assert.deepEqual(shiftMonth({ year: 99, month: 11 }, 1), { year: 100, month: 0 });
-  });
-
-  it('formats English full dates independently of the local timezone', () => {
     assert.equal(formatFullDate({ year: 2020, month: 1 }, 29), 'Saturday, February 29, 2020');
     assert.equal(formatFullDate(september, 1), 'Tuesday, September 1, 2026');
   });
 
-  it('rejects invalid months, years, days, and shifts instead of normalizing them', () => {
+  it('rejects invalid months, days, dates, and shifts instead of normalizing them', () => {
     for (const month of [
       { year: 2026, month: -1 }, { year: 2026, month: 12 }, { year: 2026, month: 1.5 },
       { year: -1, month: 0 }, { year: 10000, month: 0 }, { year: 2026.5, month: 0 },
@@ -126,21 +139,25 @@ describe('calendar helpers and constants', () => {
   });
 });
 
-describe('initial demo state', () => {
-  it('uses the exact title and ordered starter habits with stable IDs', () => {
-    const state = createInitialState(new Date(2026, 8, 19, 12));
-    assert.equal(state.version, 1);
+describe('initial demo state and reset', () => {
+  it('starts a V2 demo on day one of the current month with the ordered starter plan', () => {
+    const state = createInitialState(septemberNineteenth);
+    const habits = getHabitsForMonth(state, september);
+    assert.equal(state.version, 2);
     assert.equal(state.title, 'No Excuses Grind');
+    assert.equal(state.startedOn, '2026-09-01');
+    assert.deepEqual(Object.keys(state.habitPlans), ['2026-09']);
     assert.equal(state.isDemo, true);
-    assert.deepEqual(state.habits.map((habit) => habit.name), [
+    assert.deepEqual(habits.map((habit) => habit.name), [
       'Move your body', 'Read 10 pages', 'Drink more water',
       'Deep work', 'Quiet your mind', 'Sleep 8 hours',
     ]);
-    assert.equal(new Set(state.habits.map((habit) => habit.id)).size, 6);
-    assert.deepEqual(state.habits, createInitialState(new Date(2027, 0, 1)).habits);
+    assert.ok(habits.every((habit) => habit.startedOn === '2026-09-01'));
+    assert.equal(new Set(habits.map((habit) => habit.id)).size, 6);
+    assert.deepEqual(getHabitsForMonth(state, august), []);
   });
 
-  it('is deterministic, does not mutate now, and returns independent state objects', () => {
+  it('is deterministic and returns independent plans and completion arrays', () => {
     const now = new Date(2026, 8, 19, 12);
     const timestamp = now.getTime();
     const first = createInitialState(now);
@@ -148,40 +165,43 @@ describe('initial demo state', () => {
     assert.deepEqual(first, second);
     assert.equal(now.getTime(), timestamp);
     assert.notEqual(first, second);
-    assert.notEqual(first.habits, second.habits);
-    assert.notEqual(first.habits[0], second.habits[0]);
+    assert.notEqual(first.habitPlans, second.habitPlans);
+    assert.notEqual(first.habitPlans['2026-09'], second.habitPlans['2026-09']);
+    assert.notEqual(first.habitPlans['2026-09'][0], second.habitPlans['2026-09'][0]);
     assert.notEqual(first.completions, second.completions);
     for (const key of Object.keys(first.completions)) {
       assert.notEqual(first.completions[key], second.completions[key]);
     }
-    first.habits[0].name = 'Changed';
-    assert.equal(createInitialState(now).habits[0].name, 'Move your body');
+    first.habitPlans['2026-09'][0].name = 'Changed';
+    assert.equal(createInitialState(now).habitPlans['2026-09'][0].name, 'Move your body');
   });
 
   for (const [year, month, day] of [[2026, 8, 19], [2024, 1, 29], [2026, 3, 30], [2026, 0, 31]]) {
     it(`seeds valid, roughly 80% progress only through ${year}-${month + 1}-${day}`, () => {
+      const selectedMonth = { year, month };
       const state = createInitialState(new Date(year, month, day, 12));
-      const known = new Set(state.habits.map((habit) => habit.id));
+      const habits = getHabitsForMonth(state, selectedMonth);
+      const known = new Set(habits.map((habit) => habit.id));
       let completed = 0;
       for (const [key, ids] of Object.entries(state.completions)) {
-        assert.ok(key.startsWith(`${monthKey({ year, month })}-`));
+        assert.ok(key.startsWith(`${monthKey(selectedMonth)}-`));
         const sampleDay = Number(key.slice(-2));
         assert.ok(sampleDay >= 1 && sampleDay <= day);
-        assert.equal(key, dateKey({ year, month }, sampleDay));
+        assert.equal(key, dateKey(selectedMonth, sampleDay));
         assert.ok(ids.length > 0);
         assert.equal(new Set(ids).size, ids.length);
         assert.ok(ids.every((id) => known.has(id)));
         completed += ids.length;
       }
-      const proportion = completed / (day * state.habits.length);
+      const proportion = completed / (day * habits.length);
       assert.ok(proportion >= 0.7 && proportion <= 0.9, `Unexpected demo proportion: ${proportion}`);
       assert.deepEqual(parseStoredState(JSON.stringify(state)), state);
     });
   }
 
-  it('keeps earlier days stable and seeds no later dates on the first day of a new month', () => {
+  it('keeps earlier sample days stable and seeds no later dates on day one', () => {
     const earlier = createInitialState(new Date(2026, 8, 10, 12));
-    const later = createInitialState(new Date(2026, 8, 19, 12));
+    const later = createInitialState(septemberNineteenth);
     for (let day = 1; day <= 10; day += 1) {
       const key = dateKey(september, day);
       assert.deepEqual(earlier.completions[key], later.completions[key]);
@@ -190,90 +210,274 @@ describe('initial demo state', () => {
     assert.deepEqual(Object.keys(firstDay.completions), ['2027-01-01']);
   });
 
-  it('rejects an invalid current date', () => {
+  it('clears a demo into a real tracker starting today with only the current plan', () => {
+    const demo = deepFreeze(createInitialState(septemberNineteenth));
+    const cleared = clearTrackerProgress(demo, septemberNineteenth);
+    assert.equal(cleared.startedOn, '2026-09-19');
+    assert.equal(cleared.isDemo, false);
+    assert.deepEqual(cleared.completions, {});
+    assert.deepEqual(Object.keys(cleared.habitPlans), ['2026-09']);
+    assert.ok(cleared.habitPlans['2026-09'].every((habit) => habit.startedOn === '2026-09-19'));
+    assert.deepEqual(getMonthStats(cleared, september), {
+      completed: 0, total: 6 * 12, percentage: 0,
+    });
+    assert.equal(demo.startedOn, '2026-09-01');
+    assert.notDeepEqual(demo.completions, {});
+  });
+
+  it('clears a real tracker without moving its start or rewriting plans', () => {
+    const original = deepFreeze(stateWith({ completions: { '2026-09-01': ['move'] } }));
+    const cleared = clearTrackerProgress(original, septemberNineteenth);
+    assert.deepEqual(cleared, { ...original, completions: {}, isDemo: false });
+    assert.equal(cleared.habitPlans, original.habitPlans);
+  });
+
+  it('rejects invalid current dates', () => {
     assert.throws(() => createInitialState(new Date(NaN)), /valid Date/);
     assert.throws(() => createInitialState('2026-09-01' as unknown as Date), /valid Date/);
+    assert.throws(() => clearTrackerProgress(createInitialState(septemberNineteenth), new Date(NaN)), /valid Date/);
   });
 });
 
-describe('month statistics', () => {
-  it('uses every displayed day, including future locked dates, in the denominator', () => {
-    const state = deepFreeze(stateWith({
-      completions: { '2026-09-01': ['move'], '2026-09-30': ['read'], '2026-10-01': ['move', 'read'] },
-    }));
-    assert.deepEqual(getMonthStats(state, september), { completed: 2, total: 60, percentage: 3 });
-    assert.deepEqual(getMonthStats(state, { year: 2026, month: 9 }), {
-      completed: 2, total: 62, percentage: 3,
-    });
-  });
-
-  it('uses leap February and rounds percentages to the nearest whole number', () => {
+describe('habit plan change points and availability', () => {
+  it('inherits the latest plan at or before a month and returns copies', () => {
     const state = stateWith({
-      habits: [{ id: 'move', name: 'Move' }],
-      completions: { '2024-02-29': ['move'], '2023-02-01': ['move'] },
+      habitPlans: {
+        '2026-08': [monthHabit('move', 'Move'), monthHabit('read', 'Read')],
+        '2026-10': [monthHabit('move', 'Walk'), monthHabit('sleep', 'Sleep', '2026-10-01')],
+      },
     });
-    assert.deepEqual(getMonthStats(state, { year: 2024, month: 1 }), {
-      completed: 1, total: 29, percentage: 3,
-    });
-    assert.deepEqual(getMonthStats(state, { year: 2023, month: 1 }), {
-      completed: 1, total: 28, percentage: 4,
-    });
+    assert.deepEqual(getHabitsForMonth(state, { year: 2026, month: 6 }), []);
+    assert.deepEqual(getHabitsForMonth(state, august), state.habitPlans['2026-08']);
+    assert.deepEqual(getHabitsForMonth(state, september), state.habitPlans['2026-08']);
+    assert.deepEqual(getHabitsForMonth(state, october), state.habitPlans['2026-10']);
+    assert.deepEqual(getHabitsForMonth(state, { year: 2026, month: 10 }), state.habitPlans['2026-10']);
+    const copy = getHabitsForMonth(state, september);
+    assert.notEqual(copy, state.habitPlans['2026-08']);
+    assert.notEqual(copy[0], state.habitPlans['2026-08'][0]);
+    copy[0].name = 'Changed only in the copy';
+    assert.equal(state.habitPlans['2026-08'][0].name, 'Move');
   });
 
-  it('ignores unknown, stale, and duplicate IDs as well as invalid or out-of-month date keys', () => {
-    const state = deepFreeze(stateWith({
+  it('starts a new current-month habit today and leaves the previous month unchanged', () => {
+    const original = deepFreeze(stateWith());
+    const result = updateHabitPlan(original, september, [
+      { id: 'read', name: 'Read a book' },
+      { id: 'move', name: 'Move' },
+      { id: 'sleep', name: 'Sleep' },
+    ], septemberNineteenth);
+    assert.deepEqual(getHabitsForMonth(result, august), original.habitPlans['2026-08']);
+    assert.deepEqual(result.habitPlans['2026-09'], [
+      monthHabit('read', 'Read a book'),
+      monthHabit('move', 'Move'),
+      monthHabit('sleep', 'Sleep', '2026-09-19'),
+    ]);
+    assert.deepEqual(getHabitsForMonth(result, october), result.habitPlans['2026-09']);
+    assert.equal(isHabitAvailableOnDate(result, september, 18, 'sleep'), false);
+    assert.equal(isHabitAvailableOnDate(result, september, 19, 'sleep'), true);
+    assert.equal(original.habitPlans['2026-09'], undefined);
+  });
+
+  it('starts a new habit on day one when editing a past month', () => {
+    const julyState = stateWith({
+      startedOn: '2026-07-10',
+      habitPlans: { '2026-07': [monthHabit('move', 'Move', '2026-07-10')] },
+    });
+    const result = updateHabitPlan(julyState, august, [
+      { id: 'move', name: 'Move' }, { id: 'swim', name: 'Swim' },
+    ], septemberNineteenth);
+    assert.deepEqual(getHabitsForMonth(result, { year: 2026, month: 6 }), julyState.habitPlans['2026-07']);
+    assert.deepEqual(result.habitPlans['2026-08'], [
+      monthHabit('move', 'Move', '2026-07-10'),
+      monthHabit('swim', 'Swim', '2026-08-01'),
+    ]);
+    assert.equal(isHabitAvailableOnDate(result, august, 1, 'swim'), true);
+  });
+
+  it('uses the later tracker or habit start and is unavailable before either', () => {
+    const state = stateWith({
+      startedOn: '2026-09-10',
+      habitPlans: {
+        '2026-09': [
+          monthHabit('move', 'Move', '2026-09-10'),
+          monthHabit('read', 'Read', '2026-09-15'),
+        ],
+      },
+    });
+    const [move, read] = getHabitsForMonth(state, september);
+    assert.equal(habitAvailableFrom(state, move), '2026-09-10');
+    assert.equal(habitAvailableFrom(state, read), '2026-09-15');
+    assert.deepEqual(getHabitsForMonth(state, august), []);
+    assert.equal(isHabitAvailableOnDate(state, september, 9, 'move'), false);
+    assert.equal(isHabitAvailableOnDate(state, september, 10, 'move'), true);
+    assert.equal(isHabitAvailableOnDate(state, september, 14, 'read'), false);
+    assert.equal(isHabitAvailableOnDate(state, september, 15, 'read'), true);
+    assert.equal(isHabitAvailableOnDate(state, october, 1, 'read'), true);
+    assert.equal(isHabitAvailableOnDate(state, september, 15, 'missing'), false);
+  });
+
+  it('removing from a plan preserves earlier history and scrubs later invalid completions', () => {
+    const original = deepFreeze(stateWith({
       completions: {
-        '2026-09-01': ['move', 'move', 'deleted', 'read', 'read'],
-        '2026-09-02': ['read', 'deleted'],
-        '2026-09-31': ['move', 'read'],
-        '2026-09-00': ['move', 'read'],
-        '2026-09-1': ['move', 'read'],
-        '2025-09-01': ['move', 'read'],
+        '2026-08-31': ['move', 'read'],
+        '2026-09-01': ['move', 'read'],
+        '2026-09-02': ['read'],
+        '2026-10-01': ['read'],
+        '2026-10-02': ['move'],
       },
     }));
-    assert.deepEqual(getMonthStats(state, september), { completed: 3, total: 60, percentage: 5 });
+    const result = updateHabitPlan(original, september, [{ id: 'move', name: 'Move' }], septemberNineteenth);
+    assert.deepEqual(getHabitsForMonth(result, august), original.habitPlans['2026-08']);
+    assert.deepEqual(getHabitsForMonth(result, september), [monthHabit('move', 'Move')]);
+    assert.deepEqual(result.completions, {
+      '2026-08-31': ['move', 'read'],
+      '2026-09-01': ['move'],
+      '2026-10-02': ['move'],
+    });
+    assert.deepEqual(original.completions['2026-09-01'], ['move', 'read']);
   });
 
-  it('returns all zeroes for zero habits, even with stale completion records', () => {
-    assert.deepEqual(getMonthStats(stateWith({
-      habits: [], completions: { '2026-09-01': ['move'] },
-    }), september), { completed: 0, total: 0, percentage: 0 });
+  it('renames and reorders by stable ID without losing eligible completions', () => {
+    const original = stateWith({
+      completions: { '2026-08-31': ['move'], '2026-09-01': ['move', 'read'] },
+    });
+    const result = updateHabitPlan(original, september, [
+      { id: 'read', name: 'Read' }, { id: 'move', name: 'Walk' },
+    ], septemberNineteenth);
+    assert.equal(getHabitsForMonth(result, august)[0].name, 'Move');
+    assert.deepEqual(getHabitsForMonth(result, september), [
+      monthHabit('read', 'Read'), monthHabit('move', 'Walk'),
+    ]);
+    assert.deepEqual(result.completions, original.completions);
   });
 
-  it('handles both an empty and a completely filled month', () => {
-    const state = stateWith();
-    assert.deepEqual(getMonthStats(state, september), { completed: 0, total: 60, percentage: 0 });
-    for (let day = 1; day <= 30; day += 1) {
-      state.completions[dateKey(september, day)] = ['move', 'read'];
-    }
-    assert.deepEqual(getMonthStats(state, september), { completed: 60, total: 60, percentage: 100 });
+  it('allows nine habits per plan and more than nine IDs over the lifetime', () => {
+    const januaryHabits = Array.from({ length: 9 }, (_, index) =>
+      monthHabit(`january-${index}`, `January ${index}`, '2026-01-01'));
+    const februaryHabits = Array.from({ length: 9 }, (_, index) =>
+      monthHabit(`february-${index}`, `February ${index}`, '2026-02-01'));
+    const lifetimeState: TrackerState = {
+      version: 2,
+      title: 'Changing seasons',
+      startedOn: '2026-01-01',
+      habitPlans: { '2026-01': januaryHabits, '2026-02': februaryHabits },
+      completions: { '2026-01-01': ['january-0'], '2026-02-01': ['february-0'] },
+      isDemo: false,
+    };
+    const parsed = parseStoredState(JSON.stringify(lifetimeState));
+    assert.equal(new Set(Object.values(parsed.habitPlans).flat().map((habit) => habit.id)).size, 18);
+    assert.deepEqual(getMonthStats(parsed, { year: 2026, month: 0 }), {
+      completed: 1, total: 279, percentage: 0,
+    });
+    assert.deepEqual(getMonthStats(parsed, { year: 2026, month: 1 }), {
+      completed: 1, total: 252, percentage: 0,
+    });
+    const tooMany: Habit[] = Array.from({ length: 10 }, (_, index) => ({
+      id: `habit-${index}`, name: `Habit ${index}`,
+    }));
+    assert.throws(() => updateHabitPlan(stateWith(), september, tooMany, septemberNineteenth), /at most 9/);
+  });
+
+  it('normalizes editable names and rejects duplicate or pre-start plans', () => {
+    const result = updateHabitPlan(stateWith(), september, [
+      { id: 'move', name: '  Morning walk  ' },
+    ], septemberNineteenth);
+    assert.equal(result.habitPlans['2026-09'][0].name, 'Morning walk');
+    assert.throws(() => updateHabitPlan(stateWith(), september, [
+      { id: 'one', name: 'Read' }, { id: 'two', name: ' read ' },
+    ], septemberNineteenth), /distinct, ignoring case/);
+    assert.throws(() => updateHabitPlan(stateWith(), { year: 2026, month: 6 }, [], septemberNineteenth), /before/);
+  });
+});
+
+describe('partial-month consistency', () => {
+  it('counts eligible habit-days, including future eligible days, in the denominator', () => {
+    const state = deepFreeze(stateWith({
+      startedOn: '2026-09-10',
+      habitPlans: {
+        '2026-09': [
+          monthHabit('move', 'Move', '2026-09-10'),
+          monthHabit('read', 'Read', '2026-09-20'),
+        ],
+      },
+      completions: {
+        '2026-09-09': ['move'],
+        '2026-09-10': ['move'],
+        '2026-09-19': ['read'],
+        '2026-09-20': ['read'],
+        '2026-09-30': ['move', 'read'],
+        '2026-10-01': ['move', 'read'],
+      },
+    }));
+    assert.deepEqual(getMonthStats(state, september), {
+      completed: 4,
+      total: 32,
+      percentage: 13,
+    });
+    assert.deepEqual(getMonthStats(state, august), { completed: 0, total: 0, percentage: 0 });
+  });
+
+  it('handles partial leap and common Februaries', () => {
+    const leapState: TrackerState = {
+      version: 2,
+      title: 'Leap',
+      startedOn: '2024-02-28',
+      habitPlans: { '2024-02': [monthHabit('move', 'Move', '2024-02-28')] },
+      completions: { '2024-02-29': ['move'] },
+      isDemo: false,
+    };
+    assert.deepEqual(getMonthStats(leapState, { year: 2024, month: 1 }), {
+      completed: 1, total: 2, percentage: 50,
+    });
+    const commonState: TrackerState = {
+      ...leapState,
+      startedOn: '2025-02-28',
+      habitPlans: { '2025-02': [monthHabit('move', 'Move', '2025-02-28')] },
+      completions: { '2025-02-28': ['move'] },
+    };
+    assert.deepEqual(getMonthStats(commonState, { year: 2025, month: 1 }), {
+      completed: 1, total: 1, percentage: 100,
+    });
+  });
+
+  it('returns zeroes for zero habits and for months before the tracker start', () => {
+    const state = stateWith({
+      startedOn: '2026-09-19',
+      habitPlans: { '2026-09': [] },
+      completions: {},
+    });
+    assert.deepEqual(getMonthStats(state, september), { completed: 0, total: 0, percentage: 0 });
+    assert.deepEqual(getMonthStats(state, august), { completed: 0, total: 0, percentage: 0 });
+  });
+
+  it('reaches 100 percent when every eligible day is complete', () => {
+    const state = stateWith({
+      startedOn: '2026-09-28',
+      habitPlans: { '2026-09': [monthHabit('move', 'Move', '2026-09-28')] },
+    });
+    for (let day = 28; day <= 30; day += 1) state.completions[dateKey(september, day)] = ['move'];
+    assert.deepEqual(getMonthStats(state, september), { completed: 3, total: 3, percentage: 100 });
   });
 });
 
 describe('completion toggling', () => {
-  for (const isDemo of [false, true]) {
-    it(`toggles on and off immutably while preserving isDemo=${isDemo}`, () => {
-      const original = deepFreeze(stateWith({
-        isDemo, completions: { '2026-08-31': ['read'] },
-      }));
-      const enabled = toggleCompletion(original, september, 30, 'move', endOfSeptember);
-      assert.notEqual(enabled, original);
-      assert.notEqual(enabled.completions, original.completions);
-      assert.equal(enabled.habits, original.habits);
-      assert.equal(enabled.completions['2026-08-31'], original.completions['2026-08-31']);
-      assert.deepEqual(enabled.completions['2026-09-30'], ['move']);
-      assert.equal(enabled.isDemo, isDemo);
-      assert.equal(original.completions['2026-09-30'], undefined);
+  it('toggles an eligible date immutably and removes an empty completion key', () => {
+    const original = deepFreeze(stateWith({ completions: { '2026-08-31': ['read'] } }));
+    const enabled = toggleCompletion(original, september, 30, 'move', endOfSeptember);
+    assert.notEqual(enabled, original);
+    assert.notEqual(enabled.completions, original.completions);
+    assert.equal(enabled.habitPlans, original.habitPlans);
+    assert.deepEqual(enabled.completions['2026-08-31'], ['read']);
+    assert.deepEqual(enabled.completions['2026-09-30'], ['move']);
+    assert.equal(original.completions['2026-09-30'], undefined);
 
-      deepFreeze(enabled);
-      const disabled = toggleCompletion(enabled, september, 30, 'move', endOfSeptember);
-      assert.deepEqual(disabled, original);
-      assert.equal(Object.hasOwn(disabled.completions, '2026-09-30'), false);
-      assert.deepEqual(enabled.completions['2026-09-30'], ['move']);
-    });
-  }
+    deepFreeze(enabled);
+    const disabled = toggleCompletion(enabled, september, 30, 'move', endOfSeptember);
+    assert.deepEqual(disabled, original);
+    assert.equal(Object.hasOwn(disabled.completions, '2026-09-30'), false);
+  });
 
-  it('preserves other completions on the same day and across months', () => {
+  it('preserves other completions on the same date and in other months', () => {
     const original = deepFreeze(stateWith({
       completions: { '2026-09-01': ['move', 'read'], '2026-10-01': ['move'] },
     }));
@@ -283,42 +487,37 @@ describe('completion toggling', () => {
     assert.deepEqual(original.completions['2026-09-01'], ['move', 'read']);
   });
 
-  it('removes duplicate copies when switching a habit off', () => {
-    const result = toggleCompletion(stateWith({
-      completions: { '2026-09-01': ['move', 'move'] },
-    }), september, 1, 'move', endOfSeptember);
-    assert.deepEqual(result.completions, {});
+  it('rejects unavailable and future dates but works on an eligible boundary', () => {
+    const original = deepFreeze(stateWith({
+      startedOn: '2026-09-10',
+      habitPlans: {
+        '2026-09': [
+          monthHabit('move', 'Move', '2026-09-10'),
+          monthHabit('read', 'Read', '2026-09-20'),
+        ],
+      },
+    }));
+    const before = JSON.stringify(original);
+    assert.throws(() => toggleCompletion(original, september, 9, 'move', endOfSeptember), UnavailableDateError);
+    assert.throws(() => toggleCompletion(original, september, 19, 'read', endOfSeptember), UnavailableDateError);
+    assert.throws(() => toggleCompletion(original, september, 10, 'missing', endOfSeptember), UnavailableDateError);
+    assert.throws(
+      () => toggleCompletion(original, september, 20, 'move', new Date(2026, 8, 19, 23, 59)),
+      FutureDateError,
+    );
+    const eligible = toggleCompletion(original, september, 10, 'move', endOfSeptember);
+    assert.deepEqual(eligible.completions['2026-09-10'], ['move']);
+    assert.equal(JSON.stringify(original), before);
   });
 
-  it('accepts past leap days but rejects future dates without mutating state', () => {
-    const leap = deepFreeze(toggleCompletion(stateWith(), { year: 2024, month: 1 }, 29, 'move', endOfSeptember));
-    assert.deepEqual(leap.completions, { '2024-02-29': ['move'] });
-    assert.throws(() => toggleCompletion(leap, { year: 2099, month: 11 }, 31, 'read', endOfSeptember), FutureDateError);
-    assert.deepEqual(leap.completions, { '2024-02-29': ['move'] });
-  });
-
-  it('rejects both new and previously stored future check-ins', () => {
-    const now = new Date(2026, 8, 19, 23, 59, 59);
-    for (const completions of [{}, { '2026-09-20': ['move'] }]) {
-      const state = deepFreeze(stateWith({ completions }));
-      const before = JSON.stringify(state);
-      assert.throws(() => toggleCompletion(state, september, 20, 'move', now), FutureDateError);
-      assert.throws(() => toggleCompletion(state, { year: 2026, month: 9 }, 1, 'move', now), FutureDateError);
-      assert.equal(JSON.stringify(state), before);
-    }
-  });
-
-  it('unlocks at local midnight and keeps today and past days editable', () => {
+  it('unlocks at local midnight and keeps today editable', () => {
     const beforeMidnight = new Date(2026, 8, 19, 23, 59, 59, 999);
     const midnight = new Date(2026, 8, 20, 0, 0, 0);
     const original = deepFreeze(stateWith());
     assert.throws(() => toggleCompletion(original, september, 20, 'move', beforeMidnight), FutureDateError);
     const enabled = toggleCompletion(original, september, 20, 'move', midnight);
     assert.deepEqual(enabled.completions['2026-09-20'], ['move']);
-    const undone = toggleCompletion(enabled, september, 20, 'move', midnight);
-    assert.deepEqual(undone, original);
-    const past = toggleCompletion(undone, { year: 2025, month: 11 }, 31, 'move', midnight);
-    assert.deepEqual(past.completions['2025-12-31'], ['move']);
+    assert.deepEqual(toggleCompletion(enabled, september, 20, 'move', midnight), original);
   });
 
   describe('future date availability', () => {
@@ -328,8 +527,8 @@ describe('completion toggling', () => {
         assert.equal(isFutureDate(september, 18, now), false);
         assert.equal(isFutureDate(september, 19, now), false);
         assert.equal(isFutureDate(september, 20, now), true);
-        assert.equal(isFutureDate({ year: 2026, month: 7 }, 31, now), false);
-        assert.equal(isFutureDate({ year: 2026, month: 9 }, 1, now), true);
+        assert.equal(isFutureDate(august, 31, now), false);
+        assert.equal(isFutureDate(october, 1, now), true);
       }
     });
 
@@ -349,196 +548,173 @@ describe('completion toggling', () => {
       assert.equal(isFutureDate(month, now.getDate()), false);
       assert.equal(isFutureDate(shiftMonth(month, 1), 1), true);
       assert.equal(isFutureDate(shiftMonth(month, -1), 1), false);
-      assert.throws(() => toggleCompletion(stateWith(), shiftMonth(month, 1), 1, 'move'), FutureDateError);
     });
 
-    it('validates dates instead of silently allowing invalid input', () => {
+    it('validates dates and the current time instead of normalizing them', () => {
       assert.throws(() => isFutureDate(september, 31, endOfSeptember), /Day/);
       assert.throws(() => isFutureDate({ year: 2025, month: 1 }, 29, endOfSeptember), /Day/);
       assert.throws(() => isFutureDate(september, 1, new Date(NaN)), /valid Date/);
       assert.throws(() => toggleCompletion(stateWith(), september, 1, 'move', new Date(NaN)), /valid Date/);
+      for (const day of [0, -1, 31, 1.5, NaN, Infinity]) {
+        assert.throws(() => toggleCompletion(stateWith(), september, day, 'move'), /Day/);
+      }
     });
-  });
-
-  it('rejects unknown habits and invalid dates without changing state', () => {
-    const original = deepFreeze(stateWith());
-    for (const day of [0, -1, 31, 1.5, NaN, Infinity]) {
-      assert.throws(() => toggleCompletion(original, september, day, 'move'), /Day/);
-    }
-    assert.throws(() => toggleCompletion(original, { year: 2025, month: 1 }, 29, 'move'), /Day/);
-    assert.throws(() => toggleCompletion(original, { year: 2026, month: 12 }, 1, 'move'), /Month/);
-    assert.throws(() => toggleCompletion(original, september, 1, 'missing'), /unknown habit ID/);
-    assert.throws(() => toggleCompletion(original, september, 1, ''), /unknown habit ID/);
-    assert.throws(() => toggleCompletion(stateWith({ habits: [] }), september, 1, 'move'), /unknown/);
-    assert.deepEqual(original, stateWith());
   });
 });
 
-describe('habit reconciliation', () => {
-  it('trims, renames, and reorders habits while retaining their completion IDs', () => {
-    const original = deepFreeze(stateWith({
-      isDemo: true,
-      completions: { '2026-09-01': ['move', 'read'], '2025-12-31': ['read'] },
-    }));
-    const habits = deepFreeze([
-      { id: 'read', name: '  Read a book  ' },
-      { id: 'move', name: 'Walk' },
-      { id: 'sleep', name: 'Sleep' },
-    ]);
-    const result = reconcileHabits(original, habits);
-    assert.deepEqual(result.habits, [
-      { id: 'read', name: 'Read a book' }, { id: 'move', name: 'Walk' }, { id: 'sleep', name: 'Sleep' },
-    ]);
-    assert.deepEqual(result.completions, original.completions);
-    assert.equal(result.isDemo, true);
-    assert.equal(result.title, original.title);
-    assert.notEqual(result, original);
-    assert.notEqual(result.habits, habits);
-    assert.notEqual(result.habits[0], habits[0]);
-    assert.notEqual(result.completions, original.completions);
-    assert.notEqual(result.completions['2026-09-01'], original.completions['2026-09-01']);
-    assert.equal(habits[0].name, '  Read a book  ');
-  });
-
-  it('scrubs deleted, stale, and duplicate IDs from every month and removes empty dates', () => {
-    const original = deepFreeze(stateWith({
-      completions: {
-        '2025-12-31': ['read'],
-        '2026-01-01': ['read', 'move', 'move'],
-        '2026-09-02': ['move', 'read', 'stale'],
-        '2026-10-01': [],
+describe('stored V1 migration and strict V2 validation', () => {
+  it('migrates exact V1 data to a sentinel plan and is idempotent as V2', () => {
+    const legacy = {
+      version: 1,
+      title: 'Legacy routine',
+      habits: [{ id: 'move', name: 'Move' }, { id: 'read', name: 'Read' }],
+      completions: { '2026-09-01': ['move'], '2000-02-29': ['read'] },
+      isDemo: false,
+    };
+    const migrated = parseStoredState(JSON.stringify(legacy));
+    assert.deepEqual(migrated, {
+      version: 2,
+      title: 'Legacy routine',
+      startedOn: '0000-01-01',
+      habitPlans: {
+        '0000-01': [
+          { id: 'move', name: 'Move', startedOn: '0000-01-01' },
+          { id: 'read', name: 'Read', startedOn: '0000-01-01' },
+        ],
       },
-    }));
-    const result = reconcileHabits(original, [{ id: 'move', name: 'Move' }]);
-    assert.deepEqual(result.completions, { '2026-01-01': ['move'], '2026-09-02': ['move'] });
-    assert.deepEqual(original.completions['2025-12-31'], ['read']);
-    assert.equal(result.isDemo, false);
-  });
-
-  it('allows zero habits and clears every completion key', () => {
-    const original = deepFreeze(stateWith({
-      completions: { '2025-01-01': ['move'], '2026-09-01': ['move', 'read'] },
-    }));
-    const result = reconcileHabits(original, []);
-    assert.deepEqual(result.habits, []);
-    assert.deepEqual(result.completions, {});
-    assert.deepEqual(getMonthStats(result, september), { completed: 0, total: 0, percentage: 0 });
-    assert.deepEqual(parseStoredState(JSON.stringify(result)), result);
-  });
-
-  it('accepts nine distinct habits and trims names before checking their 32-character limit', () => {
-    const habits = Array.from({ length: 9 }, (_, index) => ({
-      id: `habit-${index}`, name: index === 0 ? `  ${'a'.repeat(32)}  ` : `Habit ${index}`,
-    }));
-    const result = reconcileHabits(stateWith(), habits);
-    assert.equal(result.habits.length, 9);
-    assert.equal(result.habits[0].name.length, 32);
-    assert.deepEqual(parseStoredState(JSON.stringify(result)), result);
-  });
-
-  const invalidHabits: Array<[string, unknown]> = [
-    ['non-array habits', {}],
-    ['more than nine habits', Array.from({ length: 10 }, (_, index) => ({ id: `${index}`, name: `Habit ${index}` }))],
-    ['empty names', [{ id: 'one', name: '' }]],
-    ['whitespace-only names', [{ id: 'one', name: ' \n\t ' }]],
-    ['overlong names', [{ id: 'one', name: 'a'.repeat(33) }]],
-    ['case-insensitive duplicate names', [{ id: 'one', name: 'Read' }, { id: 'two', name: 'READ' }]],
-    ['duplicate IDs', [{ id: 'same', name: 'Read' }, { id: 'same', name: 'Walk' }]],
-    ['empty IDs', [{ id: '', name: 'Read' }]],
-    ['untrimmed IDs', [{ id: ' id ', name: 'Read' }]],
-    ['non-string IDs', [{ id: 12, name: 'Read' }]],
-    ['non-string names', [{ id: 'one', name: 12 }]],
-    ['missing habit fields', [{ id: 'one' }]],
-    ['unknown habit fields', [{ id: 'one', name: 'Read', extra: true }]],
-    ['null habits', [null]],
-    ['sparse habits', new Array(1)],
-  ];
-  for (const [label, habits] of invalidHabits) {
-    it(`rejects ${label} in both reconciliation and storage`, () => {
-      assert.throws(() => reconcileHabits(stateWith(), habits as Habit[]), Error);
-      rejectsStored({ ...stateWith(), habits });
+      completions: legacy.completions,
+      isDemo: false,
     });
-  }
-
-  it('detects duplicates after trimming names', () => {
-    assert.throws(() => reconcileHabits(stateWith(), [
-      { id: 'one', name: ' Read ' }, { id: 'two', name: 'read' },
-    ]), /distinct, ignoring case/);
+    const reparsed = parseStoredState(JSON.stringify(migrated));
+    assert.deepEqual(reparsed, migrated);
+    assert.deepEqual(parseStoredState(JSON.stringify(reparsed)), reparsed);
   });
-});
 
-describe('strict storage validation', () => {
-  it('round-trips valid records, empty titles, maximum-length titles, and empty completion arrays', () => {
+  it('round-trips exact V2 records, title boundaries, and empty completion arrays', () => {
     for (const title of ['', ' ', 'x'.repeat(60)]) {
       const state = stateWith({
         title,
-        completions: {
-          '2000-02-29': ['move', 'read'], '2024-02-29': ['read'],
-          '0000-02-29': ['move'], '2026-09-01': [],
-        },
+        completions: { '2026-08-01': ['move', 'read'], '2026-09-01': [] },
       });
-      assert.deepEqual(parseStoredState(JSON.stringify(state)), state);
+      const parsed = parseStoredState(JSON.stringify(state));
+      assert.deepEqual(parsed, state);
+      assert.notEqual(parsed, state);
+      assert.notEqual(parsed.habitPlans, state.habitPlans);
     }
-    const empty = stateWith({ title: '', habits: [], completions: {}, isDemo: true });
+    const empty = stateWith({ title: '', habitPlans: { '2026-08': [] }, completions: {}, isDemo: true });
     assert.deepEqual(parseStoredState(JSON.stringify(empty)), empty);
   });
 
-  it('throws an identifiable StorageValidationError for malformed JSON', () => {
-    for (const value of ['', '{', '{"version":1,}', 'undefined']) {
+  it('throws an identifiable StorageValidationError for malformed JSON and roots', () => {
+    for (const value of ['', '{', '{"version":2,}', 'undefined']) {
       assert.throws(() => parseStoredState(value), (error: unknown) => {
         assert.ok(error instanceof StorageValidationError);
-        assert.ok(error instanceof Error);
         assert.equal(error.name, 'StorageValidationError');
         assert.match(error.message, /JSON/);
         return true;
       });
     }
     assert.throws(() => parseStoredState(1 as unknown as string), StorageValidationError);
+    for (const value of [null, [], 1, true, 'state', {}]) rejectsStored(value);
   });
 
-  it('rejects primitive, array, null, missing-field, and extra-field records', () => {
-    for (const value of [null, [], 1, true, 'state', {}]) rejectsStored(value);
-    for (const field of ['version', 'title', 'habits', 'completions', 'isDemo']) {
-      const record: Record<string, unknown> = { ...stateWith() };
+  it('requires the exact V2 top-level shape and valid scalar fields', () => {
+    for (const field of ['version', 'title', 'startedOn', 'habitPlans', 'completions', 'isDemo']) {
+      const record = structuredClone(stateWith()) as unknown as Record<string, unknown>;
       delete record[field];
       rejectsStored(record);
     }
     rejectsStored({ ...stateWith(), extra: true });
-  });
-
-  it('rejects wrong versions, title types or lengths, and non-boolean demo flags', () => {
-    for (const version of [0, 2, '1', null]) rejectsStored({ ...stateWith(), version });
+    for (const version of [0, 3, '2', null]) rejectsStored({ ...stateWith(), version });
     for (const title of [null, 12, [], 'x'.repeat(61)]) rejectsStored({ ...stateWith(), title });
     for (const isDemo of [0, 1, 'true', null]) rejectsStored({ ...stateWith(), isDemo });
-  });
-
-  it('requires stored names to already be trimmed rather than silently repairing data', () => {
-    rejectsStored({ ...stateWith(), habits: [{ id: 'move', name: ' Move ' }] });
-  });
-
-  it('rejects non-record completions', () => {
-    for (const completions of [null, [], 'complete', 1]) {
-      rejectsStored({ ...stateWith(), completions });
+    for (const startedOn of [null, '', '2026-02-29', '2026-8-01', '2026-08-32']) {
+      rejectsStored({ ...stateWith(), startedOn });
     }
   });
 
-  for (const key of [
-    '2026-02-29', '1900-02-29', '2100-02-29', '2024-02-30', '2026-04-31',
-    '2026-09-31', '2026-00-01', '2026-13-01', '2026-09-00', '2026-09-32',
-    '2026-9-01', '2026-09-1', '26-09-01', '-001-01-01', '10000-01-01',
-    '2026-09-01T00:00:00Z', '2026-09-01 ', '2026-09-01\n', '2026-09-01\r',
-    '2026-09-01\u2028', '__proto__', 'constructor',
-  ]) {
-    it(`rejects the non-calendar or non-ISO date key "${key}"`, () => {
-      rejectsStored({ ...stateWith(), completions: { [key]: ['move'] } });
+  it('requires a real baseline plan and valid month change-point keys', () => {
+    for (const habitPlans of [null, [], 'plans', 1, {}, { '2026-09': [] }]) {
+      rejectsStored({ ...stateWith(), habitPlans });
+    }
+    for (const key of ['2026-00', '2026-13', '2026-8', '26-08', '2026-08-01', '2026-07']) {
+      rejectsStored({
+        ...stateWith(),
+        habitPlans: { '2026-08': stateWith().habitPlans['2026-08'], [key]: [] },
+      });
+    }
+  });
+
+  it('strictly validates planned habit shapes, limits, names, and stable start dates', () => {
+    const invalidPlans: unknown[] = [
+      { '2026-08': {} },
+      { '2026-08': [null] },
+      { '2026-08': [{ id: 'move', name: 'Move' }] },
+      { '2026-08': [{ id: 'move', name: 'Move', startedOn: '2026-08-01', extra: true }] },
+      { '2026-08': [{ id: ' move ', name: 'Move', startedOn: '2026-08-01' }] },
+      { '2026-08': [{ id: 'move', name: ' Move ', startedOn: '2026-08-01' }] },
+      { '2026-08': [{ id: 'move', name: '', startedOn: '2026-08-01' }] },
+      { '2026-08': [{ id: 'move', name: 'Move', startedOn: '2026-02-29' }] },
+      { '2026-08': [{ id: 'move', name: 'Move', startedOn: '2026-09-01' }] },
+      { '2026-08': Array.from({ length: 10 }, (_, index) =>
+        monthHabit(`habit-${index}`, `Habit ${index}`)) },
+      { '2026-08': [monthHabit('one', 'Read'), monthHabit('two', 'READ')] },
+      { '2026-08': [monthHabit('same', 'Read'), monthHabit('same', 'Walk')] },
+    ];
+    for (const habitPlans of invalidPlans) rejectsStored({ ...stateWith(), habitPlans });
+
+    rejectsStored({
+      ...stateWith(),
+      habitPlans: {
+        '2026-08': [monthHabit('move', 'Move')],
+        '2026-09': [monthHabit('move', 'Move', '2026-08-02')],
+      },
     });
-  }
+    rejectsStored({
+      ...stateWith({ startedOn: '2026-08-10' }),
+      habitPlans: { '2026-08': [monthHabit('move', 'Move', '2026-08-09')] },
+    });
+  });
 
-  it('rejects non-array, unknown, duplicate, and non-string completion IDs', () => {
-    for (const ids of [null, {}, 'move', ['missing'], ['move', 'move'], [1], [null], ['']]) {
-      rejectsStored({ ...stateWith(), completions: { '2026-09-01': ids } });
+  it('rejects invalid, duplicate, unknown, and unavailable completion IDs', () => {
+    const state = stateWith({
+      startedOn: '2026-08-10',
+      habitPlans: {
+        '2026-08': [
+          monthHabit('move', 'Move', '2026-08-10'),
+          monthHabit('read', 'Read', '2026-08-20'),
+        ],
+        '2026-09': [monthHabit('move', 'Move', '2026-08-10')],
+      },
+    });
+    for (const ids of [null, {}, 'move', ['move', 'move'], [1], [null], [''], ['missing']]) {
+      rejectsStored({ ...state, completions: { '2026-08-20': ids } });
     }
-    rejectsStored({ ...stateWith(), habits: [], completions: { '2026-09-01': ['move'] } });
+    rejectsStored({ ...state, completions: { '2026-08-09': ['move'] } });
+    rejectsStored({ ...state, completions: { '2026-08-19': ['read'] } });
+    rejectsStored({ ...state, completions: { '2026-09-01': ['read'] } });
+    for (const key of [
+      '2026-02-29', '1900-02-29', '2100-02-29', '2024-02-30', '2026-04-31',
+      '2026-09-31', '2026-00-01', '2026-13-01', '2026-09-00', '2026-09-32',
+      '2026-9-01', '2026-09-1', '26-09-01', '-001-01-01', '10000-01-01',
+      '2026-09-01T00:00:00Z', '2026-09-01 ', '2026-09-01\n', 'constructor',
+    ]) {
+      rejectsStored({ ...state, completions: { [key]: ['move'] } });
+    }
+  });
+
+  it('keeps V1 validation strict before migration', () => {
+    const legacy = {
+      version: 1,
+      title: 'Legacy',
+      habits: [{ id: 'move', name: 'Move' }],
+      completions: { '2026-09-01': ['move'] },
+      isDemo: false,
+    };
+    rejectsStored({ ...legacy, extra: true });
+    rejectsStored({ ...legacy, habits: [{ id: 'move', name: ' Move ' }] });
+    rejectsStored({ ...legacy, completions: { '2026-09-01': ['missing'] } });
+    rejectsStored({ ...legacy, completions: { '2026-09-01': ['move', 'move'] } });
   });
 });
 
@@ -566,7 +742,7 @@ describe('radial geometry', () => {
     it(`lays out ${month.year}-${month.month + 1} with weekly gaps after its Sundays`, () => {
       const sectors = getDaySectors(month);
       assert.equal(sectors.length, dayCount);
-      assert.deepEqual(sectors.map((sector) => sector.day), Array.from({ length: dayCount }, (_, i) => i + 1));
+      assert.deepEqual(sectors.map((sector) => sector.day), Array.from({ length: dayCount }, (_, index) => index + 1));
       assert.deepEqual(sectors.filter((sector) => sector.endsWeek).map((sector) => sector.day), sundayDays);
       assert.equal(sectors[0].startAngle, -90);
       assert.equal(sectors.at(-1)?.endAngle, 180);
@@ -604,7 +780,7 @@ describe('radial geometry', () => {
     });
   }
 
-  it('returns an explicitly closed annular wedge with opposite inner and outer sweeps', () => {
+  it('returns a closed annular wedge with opposite inner and outer sweeps', () => {
     assert.equal(
       annularSectorPath(100, 100, 20, 40, -90, 0),
       'M 100 60 A 40 40 0 0 1 140 100 L 120 100 A 20 20 0 0 0 100 80 Z',
@@ -629,7 +805,7 @@ describe('radial geometry', () => {
     assert.doesNotMatch(annularSectorPath(0, 0, 5, 10, -90, 0), /(?:^| )-0(?: |$)/);
   });
 
-  it('supports a zero inner radius and complete annuli without degenerate circular arcs', () => {
+  it('supports a zero inner radius and complete annuli', () => {
     assert.equal(annularSectorPath(0, 0, 0, 10, -90, 0), 'M 0 -10 A 10 10 0 0 1 10 0 L 0 0 Z');
     for (const end of [270, -450]) {
       const full = annularSectorPath(0, 0, 5, 10, -90, end);
@@ -643,7 +819,7 @@ describe('radial geometry', () => {
     assert.doesNotMatch(disk, /\bL\b|\bA 0\b/);
   });
 
-  it('rejects invalid geometry rather than emitting invalid SVG', () => {
+  it('rejects invalid geometry instead of emitting invalid SVG', () => {
     assert.throws(() => polarPoint(0, 0, -1, 0), /radius/);
     assert.throws(() => polarPoint(0, 0, 1, NaN), /finite/);
     assert.throws(() => polarPoint(Infinity, 0, 1, 0), /finite/);
@@ -655,10 +831,7 @@ describe('radial geometry', () => {
     assert.throws(() => annularSectorPath(0, 0, 5, 10, 0, 0), /span/);
     assert.throws(() => annularSectorPath(0, 0, 5, 10, 0, 361), /span/);
     for (const month of [
-      { year: 2026, month: -1 },
-      { year: 2026, month: 12 },
-      { year: -1, month: 0 },
-      null,
+      { year: 2026, month: -1 }, { year: 2026, month: 12 }, { year: -1, month: 0 }, null,
     ]) {
       assert.throws(() => getDaySectors(month as Month), /Month/);
     }

@@ -11,6 +11,7 @@ import {
 } from '../lib/api'
 import type { Account, AuthResponse } from '../lib/api'
 import {
+  clearTrackerProgress,
   createInitialState,
   parseStoredState,
   STORAGE_KEY,
@@ -253,7 +254,10 @@ export function useTrackerState() {
     setAuthBusy(true)
     setAuthError('')
     try {
-      const response = await signupRequest({ username, password, tracker: guestState.current })
+      const tracker = guestState.current.isDemo
+        ? clearTrackerProgress(guestState.current, new Date())
+        : guestState.current
+      const response = await signupRequest({ username, password, tracker })
       if (!response.token) throw new Error('The server did not return a session token.')
       adoptAuthenticatedState(response, response.token)
     } catch (error) {

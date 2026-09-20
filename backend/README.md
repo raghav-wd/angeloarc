@@ -59,13 +59,37 @@ Errors have the stable shape `{ "error": { "code": "...", "message": "..." } }`.
 
 Usernames are normalized to lowercase and must contain 3–24 ASCII letters, numbers, or underscores. Reserved route/system names cannot be registered. Passwords contain 8–128 Unicode code points. Profiles are public on signup and may subsequently be made private.
 
-The tracker validator mirrors the frontend's version-1 storage model: exact fields only, at most nine distinct habits, real `YYYY-MM-DD` dates, and only known non-duplicate habit IDs. Requests are capped at 800 KiB and the serialized tracker is capped at 700 KiB, safely below Firestore's 1 MiB document limit. Demo progress is removed during signup while the title and habits are retained.
+Tracker responses use the version-2 model:
+
+```json
+{
+  "version": 2,
+  "title": "Keep Going",
+  "startedOn": "2026-09-20",
+  "habitPlans": {
+    "2026-09": [
+      { "id": "move", "name": "Move", "startedOn": "2026-09-20" }
+    ],
+    "2026-10": [
+      { "id": "move", "name": "Morning walk", "startedOn": "2026-09-20" }
+    ]
+  },
+  "completions": { "2026-09-20": ["move"] },
+  "isDemo": false
+}
+```
+
+`habitPlans` contains change-point snapshots. A month uses the most recent plan at or before that month; months before `startedOn` have no habits. A baseline plan is required in the start month, and an explicit empty plan pauses the routine. Each plan may contain at most nine habits. Reusing an ID preserves its original `startedOn`, while its display name may change in a later plan.
+
+Completion IDs must be active in the plan resolved for their date and cannot precede the tracker or habit start date. Monthly consistency still includes future eligible days, but excludes days before those start dates. Legacy version-1 payloads remain accepted and are returned as canonical V2 using a `0000-01-01` sentinel baseline, preserving their previous full-month statistics. Demo signup clears sample completions, starts the tracker on the current UTC date, and materializes only the currently effective plan. If a demo's declared start is ahead of UTC at a client-local month boundary, the required baseline plan is preserved instead of being replaced with an empty routine.
+
+V2 histories may contain at most 1,200 monthly plan snapshots and 45,000 completion-date entries; larger histories are rejected with `INVALID_TRACKER`. Requests are capped at 800 KiB and the canonical serialized tracker is capped at 704 KiB. The small allowance above the former 700 KiB V1 cap covers sentinel migration metadata while remaining safely below Firestore's 1 MiB document limit.
 
 ## Firestore setup
 
-The service stores user documents under `users/{normalizedUsername}` and session documents under `sessions/{sha256Token}`. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material and the unqueried tracker map from this directory. The tracker exemption is important: a long but valid completion history must not hit Firestore's per-document index-entry limit.
+The service stores user documents under `users/{normalizedUsername}` and session documents under `sessions/{sha256Token}`. Each user also has a small top-level `searchSummary` containing only the title and latest plan's habit count. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material, search summary, and the unqueried tracker map from this directory. The tracker exemption is important: a long but valid completion history must not hit Firestore's per-document index-entry limit.
 
-Public search uses a Firestore field mask and reads only username, title, the at-most-nine habits, and the update timestamp. It never loads password fields or the potentially large completion map.
+Public search uses a Firestore field mask and reads only username, `searchSummary`, and the update timestamp. A narrow legacy fallback reads only V1 title/habits. It never loads password fields, V2 habit-plan history, or the potentially large completion map.
 
 ```sh
 firebase deploy --only firestore --config firebase.json --project YOUR_PROJECT_ID

@@ -7,11 +7,10 @@ import type { CursorFeedback, CursorRejection } from './components/CustomCursor'
 import { LockReminder } from './components/LockReminder'
 import { MonthPicker } from './components/MonthPicker'
 import { SettingsDialog } from './components/SettingsDialog'
-import type { RoutineChanges } from './components/SettingsDialog'
 import { SocialDialog } from './components/SocialDialog'
 import { useTrackerState } from './hooks/useTrackerState'
-import { dateKey, daysInMonth, formatFullDate, isFutureDate, monthKey, reconcileHabits, toggleCompletion } from './lib/tracker'
-import type { Habit, Month } from './lib/tracker'
+import { clearTrackerProgress, dateKey, daysInMonth, formatFullDate, getHabitsForMonth, isFutureDate, isHabitAvailableOnDate, monthKey, toggleCompletion } from './lib/tracker'
+import type { Month, MonthHabit } from './lib/tracker'
 import './App.css'
 
 function App() {
@@ -35,16 +34,15 @@ function App() {
   const [activeDialog, setActiveDialog] = useState<'settings' | 'social' | null>(null)
   const [lockReminderVisible, setLockReminderVisible] = useState(false)
   const [announcement, setAnnouncement] = useState('')
-  const [toast, setToast] = useState('')
   const [cursorRejection, setCursorRejection] = useState<CursorRejection | null>(null)
-  const toastTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const settingsOpener = useRef<HTMLButtonElement | null>(null)
   const socialOpener = useRef<HTMLButtonElement | null>(null)
   const focusAfterDialog = useRef<HTMLButtonElement | null>(null)
   const workspace = useRef<HTMLElement>(null)
   const heading = useRef<HTMLDivElement>(null)
-  const dense = state.habits.length >= 7
-  const empty = state.habits.length === 0
+  const habits = getHabitsForMonth(state, month)
+  const dense = habits.length >= 7
+  const empty = habits.length === 0
   const titleWords = state.title.split(' ')
   const titleLastWord = titleWords.pop()
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
@@ -79,10 +77,7 @@ function App() {
 
   useEffect(() => {
     const interval = setInterval(() => setToday(new Date()), 60_000)
-    return () => {
-      clearInterval(interval)
-      clearTimeout(toastTimeout.current)
-    }
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -108,27 +103,28 @@ function App() {
     setActiveDialog(null)
   }
 
-  function saveRoutine(changes: RoutineChanges) {
-    setState((previous) => ({
-      ...reconcileHabits(previous, changes.habits),
-      title: changes.title,
-      ...(changes.clearProgress ? { completions: {}, isDemo: false } : {}),
-    }))
-    closeSettings()
-    setToast(changes.clearProgress ? "A clean slate. You've got this." : 'Your routine, refined.')
-    clearTimeout(toastTimeout.current)
-    toastTimeout.current = setTimeout(() => setToast(''), 3200)
-  }
-
-  function toggle(day: number, habit: Habit, feedback: CursorFeedback): boolean {
+  function toggle(day: number, habit: MonthHabit, feedback: CursorFeedback): boolean {
     const now = new Date()
+    const activeState = state.isDemo ? clearTrackerProgress(state, now) : state
+    if (!isHabitAvailableOnDate(activeState, month, day, habit.id)) {
+      if (state.isDemo) setState(activeState)
+      setCursorRejection((previous) => ({ ...feedback, id: (previous?.id ?? 0) + 1 }))
+      setAnnouncement(`${habit.name} was not part of your routine on ${formatFullDate(month, day)}.`)
+      return false
+    }
     if (isFutureDate(month, day, now)) {
       setCursorRejection((previous) => ({ ...feedback, id: (previous?.id ?? 0) + 1 }))
       setAnnouncement(`${habit.name} is locked until ${formatFullDate(month, day)}. You can only update today or earlier.`)
       return false
     }
-    setState((previous) => toggleCompletion(previous, month, day, habit.id, now))
-    const wasDone = state.completions[dateKey(month, day)]?.includes(habit.id)
+    setState((previous) => toggleCompletion(
+      previous.isDemo ? clearTrackerProgress(previous, now) : previous,
+      month,
+      day,
+      habit.id,
+      now,
+    ))
+    const wasDone = activeState.completions[dateKey(month, day)]?.includes(habit.id)
     setAnnouncement(`${habit.name}, day ${day}, marked ${wasDone ? 'not done' : 'done'}.`)
     return true
   }
@@ -194,7 +190,7 @@ function App() {
                 <button onClick={(event) => openSettings(event.currentTarget)}><Plus size={16} /> Add your first habit</button>
               </div>
             ) : (
-              <div className="tracker-month-frame" key={`${monthKey(month)}-${state.habits.length}`}>
+              <div className="tracker-month-frame" key={`${monthKey(month)}-${habits.map((habit) => habit.id).join('-')}`}>
                 <CircularTracker state={state} month={month} today={today} onToggle={toggle} />
               </div>
             )}
@@ -223,6 +219,7 @@ function App() {
             <div className="legend" aria-label="Cell legend">
               <span><i className="legend-done" /> Done</span>
               <span><i className="legend-undone" /> Not yet</span>
+              <span><i className="legend-unavailable" /> Not available</span>
             </div>
             <p>Click a cell. Keep a promise.</p>
           </div>
@@ -241,13 +238,13 @@ function App() {
         {(storageError || syncError) && <p className="storage-warning" role="alert">{storageError || syncError}</p>}
       </div>
       <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
-      {toast && <div className="success-toast" role="status"><Check size={15} strokeWidth={1.5} /> {toast}</div>}
       {settingsOpen && (
         <SettingsDialog
           state={state}
+          today={today}
           persistenceLabel={account ? syncLabel.toLowerCase() : 'Saved on this device.'}
           onClose={closeSettings}
-          onSave={saveRoutine}
+          onStateChange={setState}
         />
       )}
       {activeDialog === 'social' && (

@@ -119,7 +119,7 @@ The Vite build uses relative asset URLs, so it works at both `OWNER.github.io/RE
 - The browser holds the opaque bearer token so authentication works reliably across the GitHub Pages and Cloud Run domains. CORS accepts only configured origins.
 - Signup imports the current guest routine but clears the built-in sample completions before publishing it. Login always loads the account's server state; it never overwrites an existing account with unrelated guest data.
 - Guest and account caches use separate browser-storage keys. Logging out restores the guest routine.
-- Tracker changes are optimistic and cached locally, then debounced to the API. A sync failure does not stop the local tracker from working.
+- Tracker and settings changes save locally as they happen and are debounced to the API for signed-in users. A sync failure does not stop the local tracker from working.
 - There is intentionally no email collection or password-recovery flow in this small username-only system. Losing the password means the account cannot currently be recovered.
 
 Rate limiting is per API instance, which is appropriate for the expected small deployment but is not a replacement for a managed edge/WAF if traffic grows substantially.
@@ -128,7 +128,9 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 
 - Each concentric ring is a habit; each cell is a calendar day.
 - Today and earlier days can be checked off. Future dates remain locked based on the device's local calendar.
-- Monthly consistency is completed check-ins divided by every possible check-in in the displayed month.
-- Settings support up to nine habits, title changes, and clearing progress.
+- Gray zig-zag cells mark dates before the tracker or that habit began. They cannot be checked off and are excluded from consistency.
+- Monthly consistency is completed check-ins divided by eligible check-ins in the displayed month. Eligible future days remain in the denominator, while pre-start days do not.
+- Habits use effective-dated monthly plans: changing September leaves August intact and applies from September forward until another month has its own plan. A habit first added during the current month begins on that day.
+- Settings open on the current month, can switch through tracked months, support up to nine habits per monthly plan, and save every valid change automatically.
 - The first guest visit includes starter habits and clearly labeled sample progress.
 - Keyboard navigation, focus management, reduced motion, and touch input are supported.

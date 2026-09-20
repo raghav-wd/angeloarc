@@ -12,6 +12,8 @@ import {
   hasExactFields,
   monthStats,
   parseMonth,
+  resolveHabitPlan,
+  trackerSearchSummary,
   validateTracker,
 } from './tracker.js'
 import { publicAccount } from './types.js'
@@ -148,9 +150,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const body = requireBody(request.body, ['username', 'password', 'tracker'])
       const username = normalizeUsername(body.username)
       const password = validatePassword(body.password)
-      const tracker = clearDemoProgress(validateTracker(body.tracker))
+      const requestTime = now()
+      const tracker = clearDemoProgress(validateTracker(body.tracker), requestTime)
       const passwordCredentials = await hashPassword(password)
-      const timestamp = now().toISOString()
+      const timestamp = requestTime.toISOString()
       const user: UserRecord = {
         username,
         ...passwordCredentials,
@@ -158,6 +161,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         createdAt: timestamp,
         updatedAt: timestamp,
         tracker,
+        searchSummary: trackerSearchSummary(tracker),
       }
       try {
         await store.createUser(user)
@@ -249,13 +253,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const month = parseMonth(queryObject.month)
       const user = await store.getUser(username)
       if (!user?.isPublic) throw notFound()
+      const habits = resolveHabitPlan(user.tracker, month)
       // Public profiles may become private at any time; do not retain a copy.
       reply.header('cache-control', 'no-store')
       return {
         profile: {
           username: user.username,
           title: user.tracker.title,
-          habits: user.tracker.habits.map((habit) => habit.name),
+          habits: habits.map((habit) => habit.name),
           month: month.key,
           stats: monthStats(user.tracker, month),
           joinedAt: user.createdAt,

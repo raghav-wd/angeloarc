@@ -24,6 +24,11 @@
       "collectionGroup": "users",
       "fieldPath": "passwordSalt",
       "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "searchSummary",
+      "indexes": []
     }
   ]
 }
