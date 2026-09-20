@@ -45,7 +45,7 @@ The production service uses ADC. Do not package or set a service-account JSON ke
 
 Authenticated routes use `Authorization: Bearer <token>`. Tokens are 32 random bytes encoded with base64url, last 30 days, and are returned only by signup/login. Only their SHA-256 hashes are stored. Passwords are hashed with `scrypt` and a fresh per-user salt.
 
-- `GET /healthz`
+- `GET /health` (`/healthz` is retained as a compatibility alias)
 - `POST /v1/auth/signup` — `{username,password,tracker}`
 - `POST /v1/auth/login` — `{username,password}`
 - `GET /v1/auth/me`

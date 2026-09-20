@@ -139,9 +139,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   })
 
-  app.get('/healthz', { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } }, async () => ({
-    status: 'ok',
-  }))
+  const health = async () => ({ status: 'ok' })
+  const healthOptions = { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } }
+  app.get('/health', healthOptions, health)
+  app.get('/healthz', healthOptions, health)
 
   app.post(
     '/v1/auth/signup',
