@@ -22,30 +22,27 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .account-loading-mark {
   display: grid;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--ink);
-  box-shadow: 0 8px 28px #00000014;
+  width: 108px;
+  height: 108px;
   place-items: center;
   will-change: transform;
-  animation: account-logo-spin 1.45s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation: account-logo-spin 2.25s cubic-bezier(0.55, 0, 0.08, 1) infinite;
 }
 
 .account-loading-mark > svg {
-  width: 44px;
-  height: 44px;
+  width: 66px;
+  height: 66px;
   overflow: visible;
 }
 
 .account-loading-mark path {
   fill: none;
-  stroke: var(--paper);
+  stroke: #000;
   stroke-width: 4.5px;
 }
 
@@ -2317,10 +2314,8 @@
 }
 
 @keyframes account-logo-spin {
-  0% { transform: rotate(0deg) scale(0.96); }
-  45% { transform: rotate(190deg) scale(1); }
-  78% { transform: rotate(342deg) scale(1.025); }
-  100% { transform: rotate(360deg) scale(0.96); }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(720deg); }
 }
 
 @keyframes month-arrive {
@@ -2349,6 +2344,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .account-loading-mark {
+    transform: none;
+    animation: none;
+  }
+
   .day-note,
   .day-note.is-hidden,
   .lock-reminder,
