@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowUpRight, Check, Plus, SlidersHorizontal, UsersRound } from 'lucide-react'
+import { AccountLoadingScreen } from './components/AccountLoadingScreen'
 import { Brand } from './components/Brand'
 import { CircularTracker } from './components/CircularTracker'
 import { CustomCursor } from './components/CustomCursor'
@@ -73,7 +74,7 @@ function App() {
     const observer = new ResizeObserver(measureTitle)
     observer.observe(title)
     return () => observer.disconnect()
-  }, [state.title])
+  }, [authReady, state.title])
 
   useEffect(() => {
     const interval = setInterval(() => setToday(new Date()), 60_000)
@@ -128,6 +129,8 @@ function App() {
     setAnnouncement(`${habit.name}, day ${day}, marked ${wasDone ? 'not done' : 'done'}.`)
     return true
   }
+
+  if (!authReady) return <AccountLoadingScreen />
 
   return (
     <>
