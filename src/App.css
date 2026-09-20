@@ -23,25 +23,36 @@
   flex-direction: column;
   align-items: center;
   gap: 24px;
+  gap: 24px;
 }
 
 .account-loading-mark {
   display: grid;
   width: 108px;
   height: 108px;
+  width: 108px;
+  height: 108px;
   place-items: center;
   will-change: transform;
+  animation: account-logo-spin 2.25s cubic-bezier(0.55, 0, 0.08, 1) infinite;
   animation: account-logo-spin 2.25s cubic-bezier(0.55, 0, 0.08, 1) infinite;
 }
 
 .account-loading-mark > svg {
   width: 66px;
   height: 66px;
+  width: 66px;
+  height: 66px;
   overflow: visible;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  animation: account-logo-morph 2.25s linear infinite;
 }
 
 .account-loading-mark path {
   fill: none;
+  stroke: #000;
   stroke: #000;
   stroke-width: 4.5px;
 }
