@@ -244,7 +244,7 @@ export function SocialDialog({
       >
         <header className="social-header">
           <div>
-            <p className="eyebrow"><span /> THE ANGELO CIRCLE</p>
+            <p className="eyebrow"><span /> The Angelo Arc</p>
             <h2 id="social-heading">{heading}</h2>
             <p id="social-description">
               {panel === 'profile'

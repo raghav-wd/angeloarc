@@ -2424,8 +2424,8 @@
 
   .is-dense .tracker-stage {
     top: 0;
-    right: 7%;
-    left: 28%;
+    right: 0;
+    left: 0;
   }
 
   .is-dense .day-note {
@@ -2440,6 +2440,34 @@
   .is-dense.no-title .tracker-stage {
     right: 0;
     left: 0;
+  }
+}
+
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .is-dense .hero-heading {
+    left: 4%;
+    width: 220px;
+    max-width: 20%;
+  }
+
+  .is-dense .hero-heading .eyebrow {
+    font-size: 6.5px;
+  }
+
+  .is-dense .hero-heading h1,
+  .is-dense .hero-heading.is-long h1 {
+    font-size: 30px;
+    letter-spacing: -1.8px;
+  }
+
+  .is-dense .hero-subtitle {
+    font-size: 9px;
+  }
+}
+
+@media (min-width: 1800px) and (min-height: 900px) {
+  .tracker-month-frame {
+    max-height: 862.5px;
   }
 }
 
@@ -2501,10 +2529,6 @@
     bottom: 24px;
   }
 
-  .is-dense .hero-heading h1 {
-    font-size: 36px;
-  }
-
   .no-title .tracker-stage {
     top: 0;
   }
@@ -2562,7 +2586,7 @@
 
   .hero-heading h1 {
     margin-top: 13px;
-    font-size: 36px;
+    font-size: 30.6px;
     letter-spacing: -1.8px;
   }
 
@@ -2571,7 +2595,7 @@
   }
 
   .hero-heading.is-long h1 {
-    font-size: 22px;
+    font-size: 18.7px;
     letter-spacing: -0.5px;
   }
 
@@ -2641,13 +2665,6 @@
     opacity: 0.38;
   }
 
-  .lock-reminder {
-    position: fixed;
-    top: auto;
-    right: 25px;
-    bottom: 154px;
-  }
-
   .modal-backdrop {
     padding: 12px;
   }
@@ -2697,7 +2714,7 @@
 
   .hero-heading h1 {
     margin-top: 9px;
-    font-size: 36px;
+    font-size: 30.6px;
   }
 
   .no-title .tracker-stage {
@@ -2741,6 +2758,10 @@
     font-size: 36px;
   }
 
+  .is-dense .hero-heading h1 {
+    font-size: 30px;
+  }
+
   .hero-heading.is-long h1,
   .is-dense .hero-heading.is-long h1 {
     font-size: 20px;
@@ -2760,9 +2781,12 @@
     font-size: 8px;
   }
 
-  .tracker-stage,
-  .is-dense .tracker-stage {
+  .tracker-stage {
     inset: 0 6% 0 29%;
+  }
+
+  .is-dense .tracker-stage {
+    inset: 0;
   }
 
   .no-title .tracker-stage {
@@ -2812,12 +2836,12 @@
 @media (max-width: 600px) and (min-width: 501px) and (max-height: 540px) {
   .hero-heading h1,
   .is-dense .hero-heading h1 {
-    font-size: 36px;
+    font-size: 30.6px;
   }
 
   .hero-heading.is-long h1,
   .is-dense .hero-heading.is-long h1 {
-    font-size: 16px;
+    font-size: 13.6px;
   }
 }
 

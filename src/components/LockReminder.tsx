@@ -1,5 +1,7 @@
-import { useEffect, useEffectEvent, useRef } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { LockKeyhole } from 'lucide-react'
+
+const MOBILE_DEVICE_QUERY = '(max-width: 600px), (hover: none) and (pointer: coarse)'
 
 interface LockReminderProps {
   paused: boolean
@@ -10,10 +12,22 @@ interface LockReminderProps {
 export function LockReminder({ paused, visible, onVisibilityChange }: LockReminderProps) {
   const icon = useRef<SVGSVGElement>(null)
   const changeVisibility = useEffectEvent(onVisibilityChange)
-  const active = visible && !paused
+  const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_DEVICE_QUERY).matches)
+  const active = visible && !paused && !mobile
 
   useEffect(() => {
-    if (paused) return
+    const query = window.matchMedia(MOBILE_DEVICE_QUERY)
+    function handleChange(event: MediaQueryListEvent) {
+      setMobile(event.matches)
+      if (event.matches) changeVisibility(false)
+    }
+
+    query.addEventListener('change', handleChange)
+    return () => query.removeEventListener('change', handleChange)
+  }, [])
+
+  useEffect(() => {
+    if (paused || mobile) return
     let touchStartY = 0
     let timeout: ReturnType<typeof setTimeout> | undefined
     let vibration: Animation | undefined
@@ -86,7 +100,9 @@ export function LockReminder({ paused, visible, onVisibilityChange }: LockRemind
       clearTimeout(timeout)
       vibration?.cancel()
     }
-  }, [paused])
+  }, [mobile, paused])
+
+  if (mobile) return null
 
   return (
     <>
