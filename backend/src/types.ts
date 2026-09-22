@@ -23,6 +23,7 @@ export interface TrackerState {
   startedOn: string
   habitPlans: Record<string, MonthHabit[]>
   completions: Record<string, string[]>
+  reminders: string[]
   isDemo: boolean
 }
 

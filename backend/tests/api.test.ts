@@ -31,6 +31,7 @@ function tracker(overrides: Partial<TrackerState> = {}): TrackerState {
       '2026-09-01': ['move', 'read'],
       '2026-09-02': ['move'],
     },
+    reminders: ['One more rep.'],
     isDemo: false,
     ...structuredClone(overrides),
   }
@@ -65,6 +66,7 @@ function migratedLegacy(value: LegacyTrackerState): TrackerState {
       })),
     },
     completions: structuredClone(value.completions),
+    reminders: ['No excuses, just do it.'],
     isDemo: value.isDemo,
   }
 }
@@ -254,6 +256,7 @@ describe('signup and credentials', () => {
         ],
       },
       completions: {},
+      reminders: ['One more rep.'],
       isDemo: false,
     })
     assert.equal(JSON.stringify(body).includes('passwordHash'), false)
@@ -326,6 +329,7 @@ describe('signup and credentials', () => {
         ],
       },
       completions: {},
+      reminders: ['One more rep.'],
       isDemo: false,
     })
   })

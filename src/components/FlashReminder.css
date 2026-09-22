@@ -1,0 +1,98 @@
+.flash-reminder {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  overflow: hidden;
+  outline: none;
+  background: var(--flash-bg);
+  cursor: pointer;
+}
+
+.flash-reminder.is-leaving {
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.flash-noise {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.flash-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(85% 62% at 50% 46%, transparent 52%, color-mix(in srgb, var(--flash-ink) 26%, transparent)),
+    radial-gradient(34% 30% at 82% 12%, color-mix(in srgb, var(--flash-ink) 13%, transparent), transparent 70%),
+    radial-gradient(40% 34% at 12% 88%, color-mix(in srgb, var(--flash-ink) 11%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+.flash-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: flash-jitter 640ms steps(1) infinite;
+  pointer-events: none;
+}
+
+.flash-stage text {
+  font-family: 'DM Sans Variable', sans-serif;
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+  transform: scaleY(var(--flash-stretch, 1.4)) scaleX(0.82);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: flash-slam 130ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.flash-caption {
+  position: absolute;
+  bottom: 26px;
+  left: 50%;
+  font-size: 8px;
+  font-weight: 520;
+  letter-spacing: 2.6px;
+  color: var(--flash-ink);
+  opacity: 0.48;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.flash-still {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 9%;
+  font-size: clamp(28px, 8.5vw, 118px);
+  font-weight: 880;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--flash-ink);
+}
+
+@keyframes flash-slam {
+  from { transform: scaleY(var(--flash-stretch, 1.4)) scaleX(0.82) scale(1.18); }
+  to { transform: scaleY(var(--flash-stretch, 1.4)) scaleX(0.82) scale(1); }
+}
+
+@keyframes flash-jitter {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  13% { transform: translate(0.28%, -0.22%) rotate(0.25deg); }
+  26% { transform: translate(-0.24%, 0.18%) rotate(-0.2deg); }
+  39% { transform: translate(0.16%, 0.26%) rotate(0.1deg); }
+  52% { transform: translate(-0.3%, -0.14%) rotate(-0.3deg); }
+  65% { transform: translate(0.22%, 0.1%) rotate(0.2deg); }
+  78% { transform: translate(-0.12%, -0.26%) rotate(-0.12deg); }
+  91% { transform: translate(0.08%, 0.2%) rotate(0.28deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}

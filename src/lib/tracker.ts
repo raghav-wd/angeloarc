@@ -1,6 +1,11 @@
+import { FLASH_REMINDER_MESSAGE } from './flashReminder.ts';
+
 export const MAX_HABITS = 9;
 export const MAX_HABIT_NAME_LENGTH = 32;
 export const MAX_TITLE_LENGTH = 60;
+export const MAX_REMINDERS = 10;
+export const MAX_REMINDER_WORDS = 10;
+export const MAX_REMINDER_LENGTH = 80;
 export const STORAGE_KEY = 'angelo-routine-v1';
 
 export interface Habit {
@@ -23,6 +28,7 @@ export interface TrackerState {
   startedOn: string;
   habitPlans: Record<string, MonthHabit[]>;
   completions: Record<string, string[]>;
+  reminders: string[];
   isDemo: boolean;
 }
 
@@ -65,6 +71,31 @@ const STARTER_HABITS: readonly Habit[] = [
 ];
 
 const LEGACY_START_DATE = '0000-01-01';
+
+export function getReminderValidationError(text: string): string {
+  if (typeof text !== 'string' || !text.trim()) return 'A reminder needs a few words.';
+  if (text.length > MAX_REMINDER_LENGTH) {
+    return `Keep each reminder under ${MAX_REMINDER_LENGTH} characters.`;
+  }
+  if (text.trim().split(/\s+/).length > MAX_REMINDER_WORDS) {
+    return `Keep each reminder to ${MAX_REMINDER_WORDS} words or fewer.`;
+  }
+  return '';
+}
+
+function validateReminders(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_REMINDERS) {
+    throw new StorageValidationError(`Reminders must be an array of at most ${MAX_REMINDERS} sentences.`);
+  }
+  return value.map((reminder) => {
+    if (typeof reminder !== 'string' || getReminderValidationError(reminder)) {
+      throw new StorageValidationError(
+        `Each reminder must be 1 to ${MAX_REMINDER_WORDS} words within ${MAX_REMINDER_LENGTH} characters.`,
+      );
+    }
+    return reminder;
+  });
+}
 
 const fullDateFormatter = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
@@ -277,6 +308,7 @@ export function createInitialState(now: Date = new Date()): TrackerState {
     startedOn: sampleStart,
     habitPlans: { [planMonth]: habits },
     completions,
+    reminders: [FLASH_REMINDER_MESSAGE],
     isDemo: true,
   };
 }
@@ -404,6 +436,7 @@ function migrateLegacyTracker(legacy: LegacyTrackerState): TrackerState {
       '0000-01': legacy.habits.map((habit) => ({ ...habit, startedOn: LEGACY_START_DATE })),
     },
     completions: legacy.completions,
+    reminders: [FLASH_REMINDER_MESSAGE],
     isDemo: legacy.isDemo,
   };
 }
@@ -447,9 +480,11 @@ function parseLegacyTracker(parsed: Record<string, unknown>): TrackerState {
 }
 
 function parseTrackerV2(parsed: Record<string, unknown>): TrackerState {
-  if (!hasExactFields(parsed, ['version', 'title', 'startedOn', 'habitPlans', 'completions', 'isDemo'])) {
+  const requiredFields = ['version', 'title', 'startedOn', 'habitPlans', 'completions', 'isDemo'];
+  // Reminders arrived after version 2 shipped, so stored trackers may omit them.
+  if (!hasExactFields(parsed, requiredFields) && !hasExactFields(parsed, [...requiredFields, 'reminders'])) {
     throw new StorageValidationError(
-      'Tracker data must contain exactly version, title, startedOn, habitPlans, completions, and isDemo.',
+      'Tracker data must contain exactly version, title, startedOn, habitPlans, completions, and isDemo, plus optional reminders.',
     );
   }
   if (typeof parsed.title !== 'string' || parsed.title.length > MAX_TITLE_LENGTH) {
@@ -490,6 +525,9 @@ function parseTrackerV2(parsed: Record<string, unknown>): TrackerState {
     startedOn: parsed.startedOn,
     habitPlans,
     completions: {},
+    reminders: Object.hasOwn(parsed, 'reminders')
+      ? validateReminders(parsed.reminders)
+      : [FLASH_REMINDER_MESSAGE],
     isDemo: parsed.isDemo,
   };
   if (!isRecord(parsed.completions)) throw new StorageValidationError('Completions must be a date-keyed object.');
