@@ -11,6 +11,7 @@ import { LockReminder } from './components/LockReminder'
 import { MonthPicker } from './components/MonthPicker'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SocialPanel } from './components/SocialPanel'
+import { mergeGuestNotesIntoAccount, useDailyNotes } from './hooks/useDailyNotes'
 import { useDailyVisits } from './hooks/useDailyVisits'
 import { useTrackerState } from './hooks/useTrackerState'
 import { FLASH_REMINDER_MESSAGE, pickReminder } from './lib/flashReminder'
@@ -48,12 +49,14 @@ function App() {
   } = useTrackerState()
   const [today, setToday] = useState(() => new Date())
   const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
+  const { dailyNotes, setDailyNote, notesStorageError } = useDailyNotes(account?.username)
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [panel, setPanel] = useState<PanelKind | null>(null)
   const [phase, setPhase] = useState<PanelPhase>('closed')
   const [lockReminderVisible, setLockReminderVisible] = useState(false)
   const [flashActive, setFlashActive] = useState(false)
   const [flashMessage, setFlashMessage] = useState(FLASH_REMINDER_MESSAGE)
+  const [dateNoteOpen, setDateNoteOpen] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [cursorRejection, setCursorRejection] = useState<CursorRejection | null>(null)
   const flashOpener = useRef<HTMLButtonElement | null>(null)
@@ -137,6 +140,11 @@ function App() {
   function closeFlash() {
     setFlashActive(false)
     requestAnimationFrame(() => flashOpener.current?.focus({ preventScroll: true }))
+  }
+
+  async function signupWithNotes(username: string, password: string) {
+    await signup(username, password)
+    mergeGuestNotesIntoAccount(username)
   }
 
   function toggle(day: number, habit: MonthHabit, feedback: CursorFeedback): boolean {
@@ -245,7 +253,11 @@ function App() {
                   month={month}
                   today={today}
                   dailyVisits={dailyVisits}
+                  dailyNotes={dailyNotes}
+                  notesEnabled={phase === 'closed' && !flashActive}
                   onToggle={toggle}
+                  onDailyNoteChange={setDailyNote}
+                  onNoteVisibilityChange={setDateNoteOpen}
                 />
               </div>
             )}
@@ -257,9 +269,9 @@ function App() {
             <span className="note-caption">THAT&apos;S THE WHOLE IDEA.</span>
           </aside>
           <aside
-            className={`day-note sweep-item ${lockReminderVisible ? 'is-hidden' : ''}`}
+            className={`day-note sweep-item ${lockReminderVisible ? 'is-hidden' : ''} ${dateNoteOpen ? 'is-date-note-open' : ''}`}
             style={sweep(TEXT_SWEEP.dayNote)}
-            aria-hidden={lockReminderVisible}
+            aria-hidden={lockReminderVisible || dateNoteOpen}
           >
             <div className="day-note-heading"><span />{isCurrentMonth ? 'TODAY IS A GOOD DAY' : 'ONE DAY AT A TIME'}</div>
             <p className="day-counter">{isCurrentMonth ? String(today.getDate()).padStart(2, '0') : String(daysInMonth(month)).padStart(2, '0')}<span> / {daysInMonth(month)}</span></p>
@@ -305,7 +317,7 @@ function App() {
                 syncLabel={syncLabel.toLowerCase()}
                 onClose={closePanel}
                 onLogin={login}
-                onSignup={signup}
+                onSignup={signupWithNotes}
                 onLogout={logout}
                 onVisibilityChange={setProfilePublic}
               />
@@ -336,7 +348,9 @@ function App() {
             <p>Little by little, a little becomes a lot.</p>
           </div>
         </footer>
-        {(storageError || syncError) && <p className="storage-warning" role="alert">{storageError || syncError}</p>}
+        {(storageError || notesStorageError || syncError) && (
+          <p className="storage-warning" role="alert">{storageError || notesStorageError || syncError}</p>
+        )}
       </div>
       <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       {flashActive && <FlashReminder message={flashMessage} onClose={closeFlash} />}

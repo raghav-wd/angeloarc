@@ -1,6 +1,6 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, LockKeyhole, Plus } from 'lucide-react'
+import { Check, LockKeyhole, Plus, X } from 'lucide-react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { CursorFeedback } from './CustomCursor'
 import { habitLabelProgress, sweepProgress, TEXT_SWEEP } from '../lib/radialSweep'
@@ -15,6 +15,7 @@ import {
   habitAvailableFrom,
   isHabitAvailableOnDate,
   isFutureDate,
+  monthKey,
   polarPoint,
 } from '../lib/tracker'
 import type { Habit, Month, MonthHabit, TrackerState } from '../lib/tracker'
@@ -36,7 +37,177 @@ interface CircularTrackerProps {
   month: Month
   today: Date
   dailyVisits: ReadonlySet<string>
+  dailyNotes: Readonly<Record<string, string>>
+  notesEnabled: boolean
   onToggle: (day: number, habit: MonthHabit, feedback: CursorFeedback) => boolean
+  onDailyNoteChange: (date: string, text: string) => void
+  onNoteVisibilityChange: (visible: boolean) => void
+}
+
+interface SelectedDay {
+  day: number
+  monthKey: string
+  point: { x: number; y: number }
+  preferredSide: 'left' | 'right'
+  trigger: SVGGElement
+  svg: SVGSVGElement
+}
+
+interface DateNoteLayout {
+  left: number
+  top: number
+  width: number
+  path: string
+  arrivesFrom: 'left' | 'right'
+}
+
+const DATE_NOTE_WIDTH = 224
+const DATE_NOTE_HEIGHT = 208
+const DATE_NOTE_GAP = 18
+const DATE_NOTE_MARGIN = 16
+
+function dateNoteLayout(svg: SVGSVGElement, selected: SelectedDay): DateNoteLayout {
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const svgRect = svg.getBoundingClientRect()
+  const viewBox = svg.viewBox.baseVal
+  const scaleX = svgRect.width / viewBox.width
+  const scaleY = svgRect.height / viewBox.height
+  const anchorX = svgRect.left + (selected.point.x - viewBox.x) * scaleX
+  const anchorY = svgRect.top + (selected.point.y - viewBox.y) * scaleY
+  const width = Math.min(DATE_NOTE_WIDTH, viewportWidth - DATE_NOTE_MARGIN * 2)
+  const leftCandidate = svgRect.left - DATE_NOTE_GAP - width
+  const rightCandidate = svgRect.right + DATE_NOTE_GAP
+  const leftFits = leftCandidate >= DATE_NOTE_MARGIN
+  const rightFits = rightCandidate + width <= viewportWidth - DATE_NOTE_MARGIN
+
+  let left: number
+  if (selected.preferredSide === 'left' && leftFits) {
+    left = leftCandidate
+  } else if (selected.preferredSide === 'right' && rightFits) {
+    left = rightCandidate
+  } else if (leftFits || rightFits) {
+    left = leftFits ? leftCandidate : rightCandidate
+  } else {
+    left = anchorX < viewportWidth / 2
+      ? viewportWidth - DATE_NOTE_MARGIN - width
+      : DATE_NOTE_MARGIN
+  }
+
+  const verticalMargin = viewportHeight >= 560 ? 68 : DATE_NOTE_MARGIN
+  const top = Math.max(
+    verticalMargin,
+    Math.min(anchorY - DATE_NOTE_HEIGHT / 2, viewportHeight - verticalMargin - DATE_NOTE_HEIGHT),
+  )
+  const noteOnRight = left + width / 2 >= anchorX
+  const startX = anchorX + (noteOnRight ? 12 : -12)
+  const endX = noteOnRight ? left + 5 : left + width - 5
+  const endY = Math.max(top + 22, Math.min(anchorY, top + DATE_NOTE_HEIGHT - 22))
+  const kneeX = startX + (noteOnRight ? 24 : -24)
+  const path = `M ${startX} ${anchorY} L ${kneeX} ${anchorY} L ${endX} ${endY}`
+
+  return {
+    left,
+    top,
+    width,
+    path,
+    arrivesFrom: noteOnRight ? 'right' : 'left',
+  }
+}
+
+function DateNote({
+  selected,
+  month,
+  value,
+  onChange,
+  onClose,
+}: {
+  selected: SelectedDay
+  month: Month
+  value: string
+  onChange: (text: string) => void
+  onClose: () => void
+}) {
+  const note = useRef<HTMLElement>(null)
+  const textarea = useRef<HTMLTextAreaElement>(null)
+  const [layout, setLayout] = useState(() => dateNoteLayout(selected.svg, selected))
+  const fullDate = formatFullDate(month, selected.day)
+
+  useLayoutEffect(() => {
+    const reposition = () => setLayout(dateNoteLayout(selected.svg, selected))
+    const observer = new ResizeObserver(reposition)
+    observer.observe(selected.svg)
+    window.addEventListener('resize', reposition)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', reposition)
+    }
+  }, [selected])
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => textarea.current?.focus({ preventScroll: true }))
+
+    function outside(event: PointerEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (note.current?.contains(target) || selected.trigger.contains(target)) return
+      onClose()
+    }
+
+    document.addEventListener('pointerdown', outside)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('pointerdown', outside)
+    }
+  }, [onClose, selected.trigger])
+
+  return createPortal(
+    <div className="date-note-layer">
+      <svg className="date-note-connector" aria-hidden="true">
+        <path key={layout.path} d={layout.path} pathLength="1" />
+      </svg>
+      <div
+        className="date-note-positioner"
+        data-arrives-from={layout.arrivesFrom}
+        style={{ left: layout.left, top: layout.top, width: layout.width }}
+      >
+        <span className="date-note-pin" aria-hidden="true" />
+        <aside
+          ref={note}
+          id="date-note-card"
+          className="date-note-card"
+          role="region"
+          aria-label={`Note for ${fullDate}`}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            onClose()
+          }}
+        >
+          <header className="date-note-header">
+            <div>
+              <span>DAY NOTE</span>
+              <p>{fullDate}</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label={`Close note for ${fullDate}`}>
+              <X size={14} strokeWidth={1.35} />
+            </button>
+          </header>
+          <textarea
+            ref={textarea}
+            rows={6}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label={`Write a note for ${fullDate}`}
+            placeholder="A few lines about this day…"
+            spellCheck="true"
+          />
+          <footer>SAVED ON THIS DEVICE</footer>
+        </aside>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 function CellTooltip({
@@ -210,9 +381,20 @@ function ConsistencyScore({
   )
 }
 
-export function CircularTracker({ state, month, today, dailyVisits, onToggle }: CircularTrackerProps) {
+export function CircularTracker({
+  state,
+  month,
+  today,
+  dailyVisits,
+  dailyNotes,
+  notesEnabled,
+  onToggle,
+  onDailyNoteChange,
+  onNoteVisibilityChange,
+}: CircularTrackerProps) {
   const [hovered, setHovered] = useState<HoveredCell | null>(null)
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
+  const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null)
   const svg = useRef<SVGSVGElement>(null)
   const unavailablePatternId = `unavailable-${useId().replaceAll(':', '')}`
   const days = daysInMonth(month)
@@ -226,6 +408,46 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
   const size = Math.max((outerRadius + 35) * 2, 550)
   const center = size / 2
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
+  const activeMonthKey = monthKey(month)
+  const selectedDayForMonth = selectedDay?.monthKey === activeMonthKey ? selectedDay : null
+
+  useEffect(() => {
+    if (!selectedDay || (notesEnabled && selectedDay.monthKey === activeMonthKey)) return
+    const frame = requestAnimationFrame(() => {
+      setSelectedDay(null)
+      onNoteVisibilityChange(false)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [activeMonthKey, notesEnabled, onNoteVisibilityChange, selectedDay])
+
+  useEffect(() => () => onNoteVisibilityChange(false), [onNoteVisibilityChange])
+
+  const closeDateNote = useCallback((restoreFocus = false) => {
+    const trigger = selectedDay?.trigger
+    setSelectedDay(null)
+    onNoteVisibilityChange(false)
+    if (restoreFocus) requestAnimationFrame(() => trigger?.focus({ preventScroll: true }))
+  }, [onNoteVisibilityChange, selectedDay])
+
+  const openDateNote = useCallback((day: number, point: { x: number; y: number }, trigger: SVGGElement) => {
+    if (!notesEnabled) return
+    const ownerSvg = trigger.ownerSVGElement
+    if (!ownerSvg) return
+    setHovered(null)
+    if (selectedDay?.day === day) {
+      closeDateNote(true)
+      return
+    }
+    setSelectedDay({
+      day,
+      monthKey: activeMonthKey,
+      point,
+      preferredSide: point.x < center ? 'left' : 'right',
+      trigger,
+      svg: ownerSvg,
+    })
+    onNoteVisibilityChange(true)
+  }, [activeMonthKey, center, closeDateNote, notesEnabled, onNoteVisibilityChange, selectedDay?.day])
 
   function activateCell(element: SVGPathElement, day: number, habit: MonthHabit, feedback?: CursorFeedback) {
     const rect = element.getBoundingClientRect()
@@ -394,8 +616,25 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
           const visitDot = polarPoint(center, center, outerRadius + 6, sector.midAngle)
           const isToday = isCurrentMonth && sector.day === today.getDate()
           const visited = dailyVisits.has(dateKey(month, sector.day))
+          const noteKey = dateKey(month, sector.day)
+          const noteOpen = selectedDayForMonth?.day === sector.day
           return (
-            <g key={sector.day} className={`day-label ${isToday ? 'is-today' : ''}`} aria-hidden="true">
+            <g
+              key={sector.day}
+              className={`day-label ${isToday ? 'is-today' : ''} ${noteOpen ? 'is-note-open' : ''}`}
+              role="button"
+              tabIndex={notesEnabled ? 0 : -1}
+              aria-label={`${dailyNotes[noteKey] ? 'Edit' : 'Open'} note for ${formatFullDate(month, sector.day)}`}
+              aria-expanded={noteOpen}
+              aria-controls={noteOpen ? 'date-note-card' : undefined}
+              onClick={(event) => openDateNote(sector.day, point, event.currentTarget)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                if (!event.repeat) openDateNote(sector.day, point, event.currentTarget)
+              }}
+            >
+              <circle className="date-label-hit" cx={point.x} cy={point.y} r="12" />
               {isToday && <circle className="today-marker" cx={point.x} cy={point.y} r="10" />}
               <text x={point.x} y={point.y} textAnchor="middle" dominantBaseline="central">
                 {String(sector.day).padStart(2, '0')}
@@ -408,6 +647,7 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
       </svg>
       <p id="tracker-keyboard-help" className="sr-only">
         Use arrow keys to move between days and habits. Press Enter or Space to mark a habit done or undone.
+        Focus a date label and press Enter or Space to open its daily note.
         Future days are locked until their local calendar date.
         Zig-zag cells predate the tracker or habit and cannot be checked off.
         A black dot between a date and the tracker means you visited ANGELO on that day.
@@ -421,6 +661,16 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
           future={isFutureDate(month, hovered.day, today)}
           unavailable={!isHabitAvailableOnDate(state, month, hovered.day, hovered.habit.id)}
           availableFrom={habitAvailableFrom(state, hovered.habit)}
+        />
+      )}
+      {selectedDayForMonth && notesEnabled && (
+        <DateNote
+          key={dateKey(month, selectedDayForMonth.day)}
+          selected={selectedDayForMonth}
+          month={month}
+          value={dailyNotes[dateKey(month, selectedDayForMonth.day)] ?? ''}
+          onChange={(text) => onDailyNoteChange(dateKey(month, selectedDayForMonth.day), text)}
+          onClose={() => closeDateNote(true)}
         />
       )}
     </>
