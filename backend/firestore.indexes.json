@@ -29,6 +29,16 @@
       "collectionGroup": "users",
       "fieldPath": "searchSummary",
       "indexes": []
+    },
+    {
+      "collectionGroup": "following",
+      "fieldPath": "followedUsername",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
     }
   ]
 }

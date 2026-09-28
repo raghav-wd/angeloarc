@@ -93,7 +93,7 @@ V2 histories may contain at most 1,200 monthly plan snapshots and 45,000 complet
 
 The service stores user documents under `users/{normalizedUsername}`, session documents under `sessions/{sha256Token}`, and follow edges under `users/{followerUsername}/following/{followedUsername}`. Each user also has a small top-level `searchSummary` containing only the title and latest plan's habit count. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material, search summary, and the unqueried tracker map from this directory. The tracker exemption is important: a long but valid completion history must not hit Firestore's per-document index-entry limit.
 
-Public search uses a Firestore field mask and reads only username, `searchSummary`, and the update timestamp. A narrow legacy fallback reads only V1 title/habits. It never loads password fields, V2 habit-plan history, or the potentially large completion map.
+Public search uses a Firestore field mask and reads only username, `searchSummary`, and the update timestamp. A narrow legacy fallback reads only V1 title/habits. It never loads password fields, V2 habit-plan history, or the potentially large completion map. The checked-in indexes also include the collection-group ascending index on `following.followedUsername` required by follower counts; profile and follow endpoints return server errors if that index is omitted from a Firestore deployment.
 
 ```sh
 firebase deploy --only firestore --config firebase.json --project YOUR_PROJECT_ID

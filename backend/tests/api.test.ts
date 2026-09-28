@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../src/app.js'
@@ -15,6 +16,27 @@ import type { LegacyTrackerState, MonthHabit, TrackerState } from '../src/types.
 
 const PASSWORD = 'a-safe-password'
 const ORIGIN = 'https://app.example.com'
+
+describe('Firestore index manifest', () => {
+  it('includes the collection-group index required by follower counts', () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL('../firestore.indexes.json', import.meta.url), 'utf8'),
+    ) as {
+      fieldOverrides?: Array<{
+        collectionGroup?: string
+        fieldPath?: string
+        indexes?: Array<{ order?: string; queryScope?: string }>
+      }>
+    }
+    const followerField = manifest.fieldOverrides?.find((field) => (
+      field.collectionGroup === 'following' && field.fieldPath === 'followedUsername'
+    ))
+    assert.ok(followerField)
+    assert.ok(followerField.indexes?.some((index) => (
+      index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
+    )))
+  })
+})
 
 function tracker(overrides: Partial<TrackerState> = {}): TrackerState {
   return {
