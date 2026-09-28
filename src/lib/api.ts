@@ -91,12 +91,25 @@ export interface PublicProfile {
   habits: string[];
   month: string;
   stats: ProfileStats;
+  tracker: TrackerState;
+  followerCount: number;
+  isFollowing: boolean;
   joinedAt: string;
   updatedAt: string;
 }
 
 export interface PublicProfileResponse {
   profile: PublicProfile;
+}
+
+export interface SocialSummaryResponse {
+  followers: number;
+  following: number;
+}
+
+export interface FollowResponse {
+  following: boolean;
+  followerCount: number;
 }
 
 export class ApiError extends Error {
@@ -114,7 +127,7 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   token?: string;
   body?: unknown;
   signal?: AbortSignal;
@@ -293,10 +306,49 @@ export function getPublicProfile(
   username: string,
   month: string,
   signal?: AbortSignal,
+  token?: string,
 ): Promise<PublicProfileResponse> {
   const params = `?${new URLSearchParams({ month }).toString()}`;
   return requestJson<PublicProfileResponse>(
     `/v1/profiles/${encodeURIComponent(username)}${params}`,
-    { signal },
+    { signal, token },
   );
+}
+
+export function getSocialSummary(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SocialSummaryResponse> {
+  return requestJson<SocialSummaryResponse>('/v1/me/social', { token, signal });
+}
+
+export function getFollowingProfiles(
+  token: string,
+  signal?: AbortSignal,
+): Promise<ProfileSearchResponse> {
+  return requestJson<ProfileSearchResponse>('/v1/me/following', { token, signal });
+}
+
+export function followProfile(
+  token: string,
+  username: string,
+  signal?: AbortSignal,
+): Promise<FollowResponse> {
+  return requestJson<FollowResponse>(`/v1/me/following/${encodeURIComponent(username)}`, {
+    method: 'PUT',
+    token,
+    signal,
+  });
+}
+
+export function unfollowProfile(
+  token: string,
+  username: string,
+  signal?: AbortSignal,
+): Promise<FollowResponse> {
+  return requestJson<FollowResponse>(`/v1/me/following/${encodeURIComponent(username)}`, {
+    method: 'DELETE',
+    token,
+    signal,
+  });
 }

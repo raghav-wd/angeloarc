@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SetStateAction } from 'react'
 import {
   ApiError,
+  followProfile,
+  getFollowingProfiles,
   getMe,
+  getPublicProfile,
+  getSocialSummary,
   login as loginRequest,
   logout as logoutRequest,
   signup as signupRequest,
   updateProfile,
   updateTracker,
+  unfollowProfile,
 } from '../lib/api'
 import type { Account, AuthResponse } from '../lib/api'
 import {
@@ -333,6 +338,34 @@ export function useTrackerState() {
     }
   }, [])
 
+  const loadPublicProfile = useCallback((username: string, month: string, signal?: AbortSignal) => (
+    getPublicProfile(username, month, signal, tokenRef.current ?? undefined)
+  ), [])
+
+  const loadFollowingProfiles = useCallback((signal?: AbortSignal) => {
+    const token = tokenRef.current
+    if (!token) throw new ApiError('Sign in to see the people you follow.', 401, 'UNAUTHORIZED')
+    return getFollowingProfiles(token, signal)
+  }, [])
+
+  const loadSocialSummary = useCallback((signal?: AbortSignal) => {
+    const token = tokenRef.current
+    if (!token) throw new ApiError('Sign in to see your social details.', 401, 'UNAUTHORIZED')
+    return getSocialSummary(token, signal)
+  }, [])
+
+  const followUser = useCallback((username: string, signal?: AbortSignal) => {
+    const token = tokenRef.current
+    if (!token) throw new ApiError('Sign in to follow people.', 401, 'UNAUTHORIZED')
+    return followProfile(token, username, signal)
+  }, [])
+
+  const unfollowUser = useCallback((username: string, signal?: AbortSignal) => {
+    const token = tokenRef.current
+    if (!token) throw new ApiError('Sign in to change who you follow.', 401, 'UNAUTHORIZED')
+    return unfollowProfile(token, username, signal)
+  }, [])
+
   return {
     state,
     setState,
@@ -347,5 +380,10 @@ export function useTrackerState() {
     login,
     logout,
     setProfilePublic,
+    loadPublicProfile,
+    loadFollowingProfiles,
+    loadSocialSummary,
+    followUser,
+    unfollowUser,
   }
 }

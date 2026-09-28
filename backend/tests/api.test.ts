@@ -714,6 +714,9 @@ describe('public profiles and privacy', () => {
         habits: [],
         month: '2026-08',
         stats: { completed: 0, total: 0, percentage: 0 },
+          tracker: { ...aliceTracker, reminders: [] },
+          followerCount: 0,
+          isFollowing: false,
         joinedAt: '2026-09-19T00:00:00.000Z',
         updatedAt: '2026-09-19T00:00:00.000Z',
       },
@@ -731,6 +734,9 @@ describe('public profiles and privacy', () => {
         habits: ['Move', 'Read'],
         month: '2026-09',
         stats: { completed: 3, total: 37, percentage: 8 },
+          tracker: { ...aliceTracker, reminders: [] },
+          followerCount: 0,
+          isFollowing: false,
         joinedAt: '2026-09-19T00:00:00.000Z',
         updatedAt: '2026-09-19T00:00:00.000Z',
       },
@@ -748,6 +754,9 @@ describe('public profiles and privacy', () => {
         habits: ['Code'],
         month: '2026-11',
         stats: { completed: 1, total: 30, percentage: 3 },
+          tracker: { ...aliceTracker, reminders: [] },
+          followerCount: 0,
+          isFollowing: false,
         joinedAt: '2026-09-19T00:00:00.000Z',
         updatedAt: '2026-09-19T00:00:00.000Z',
       },
@@ -797,5 +806,82 @@ describe('public profiles and privacy', () => {
     for (const privateField of ['password', 'passwordHash', 'passwordSalt', 'token']) {
       assert.equal(serialized.includes(privateField), false)
     }
+  })
+
+  it('follows public profiles, reports follower totals, and lists the signed-in circle', async (context) => {
+    const { app } = await testApp()
+    context.after(() => app.close())
+    const aliceToken = (await signup(app, 'alice')).json().token as string
+    const bobToken = (await signup(app, 'bob')).json().token as string
+
+    const followed = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/following/bob',
+      headers: bearer(aliceToken),
+    })
+    assert.equal(followed.statusCode, 200)
+    assert.deepEqual(followed.json(), { following: true, followerCount: 1 })
+
+    const followedAgain = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/following/bob',
+      headers: bearer(aliceToken),
+    })
+    assert.deepEqual(followedAgain.json(), { following: true, followerCount: 1 })
+
+    const authenticatedProfile = await app.inject({
+      method: 'GET',
+      url: '/v1/profiles/bob?month=2026-09',
+      headers: bearer(aliceToken),
+    })
+    assert.equal(authenticatedProfile.json().profile.isFollowing, true)
+    assert.equal(authenticatedProfile.json().profile.followerCount, 1)
+    assert.deepEqual(authenticatedProfile.json().profile.tracker.reminders, [])
+
+    const guestProfile = await app.inject({ method: 'GET', url: '/v1/profiles/bob?month=2026-09' })
+    assert.equal(guestProfile.json().profile.isFollowing, false)
+    assert.equal(guestProfile.json().profile.followerCount, 1)
+
+    const circle = await app.inject({
+      method: 'GET',
+      url: '/v1/me/following',
+      headers: bearer(aliceToken),
+    })
+    assert.deepEqual(circle.json().profiles.map((profile: { username: string }) => profile.username), ['bob'])
+    assert.equal(Object.hasOwn(circle.json().profiles[0] as object, 'tracker'), false)
+
+    const aliceSocial = await app.inject({
+      method: 'GET',
+      url: '/v1/me/social',
+      headers: bearer(aliceToken),
+    })
+    assert.deepEqual(aliceSocial.json(), { followers: 0, following: 1 })
+    const bobSocial = await app.inject({
+      method: 'GET',
+      url: '/v1/me/social',
+      headers: bearer(bobToken),
+    })
+    assert.deepEqual(bobSocial.json(), { followers: 1, following: 0 })
+
+    const selfFollow = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/following/alice',
+      headers: bearer(aliceToken),
+    })
+    assert.equal(selfFollow.statusCode, 400)
+    assert.equal(selfFollow.json().error.code, 'CANNOT_FOLLOW_SELF')
+
+    const unfollowed = await app.inject({
+      method: 'DELETE',
+      url: '/v1/me/following/bob',
+      headers: bearer(aliceToken),
+    })
+    assert.deepEqual(unfollowed.json(), { following: false, followerCount: 0 })
+    const emptyCircle = await app.inject({
+      method: 'GET',
+      url: '/v1/me/following',
+      headers: bearer(aliceToken),
+    })
+    assert.deepEqual(emptyCircle.json(), { profiles: [] })
   })
 })

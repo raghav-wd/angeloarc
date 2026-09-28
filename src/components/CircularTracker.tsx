@@ -42,6 +42,8 @@ interface CircularTrackerProps {
   onToggle: (day: number, habit: MonthHabit, feedback: CursorFeedback) => boolean
   onDailyNoteChange: (date: string, text: string) => void
   onNoteVisibilityChange: (visible: boolean) => void
+  readOnly?: boolean
+  ownerUsername?: string
 }
 
 interface SelectedDay {
@@ -217,6 +219,8 @@ function CellTooltip({
   future,
   unavailable,
   availableFrom,
+  readOnly,
+  ownerUsername,
 }: {
   cell: HoveredCell
   month: Month
@@ -224,6 +228,8 @@ function CellTooltip({
   future: boolean
   unavailable: boolean
   availableFrom: string
+  readOnly: boolean
+  ownerUsername?: string
 }) {
   const tooltip = useRef<HTMLDivElement>(null)
 
@@ -264,9 +270,13 @@ function CellTooltip({
       </div>
       <p className="tooltip-action">
         {unavailable
-          ? `Part of your routine from ${new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${availableFrom}T12:00:00Z`))}.`
+          ? `Part of ${readOnly && ownerUsername ? `@${ownerUsername}'s` : 'your'} routine from ${new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${availableFrom}T12:00:00Z`))}.`
           : future
             ? "Not yet. Let's show up for today."
+            : readOnly
+              ? done
+                ? `${ownerUsername ? `@${ownerUsername}` : 'This person'} kept this promise.`
+                : 'No check-in for this day.'
             : done
               ? 'A promise kept. Click to undo.'
               : 'Click to keep this promise.'}
@@ -391,6 +401,8 @@ export function CircularTracker({
   onToggle,
   onDailyNoteChange,
   onNoteVisibilityChange,
+  readOnly = false,
+  ownerUsername,
 }: CircularTrackerProps) {
   const [hovered, setHovered] = useState<HoveredCell | null>(null)
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
@@ -450,6 +462,7 @@ export function CircularTracker({
   }, [activeMonthKey, center, closeDateNote, notesEnabled, onNoteVisibilityChange, selectedDay?.day])
 
   function activateCell(element: SVGPathElement, day: number, habit: MonthHabit, feedback?: CursorFeedback) {
+    if (readOnly) return
     const rect = element.getBoundingClientRect()
     const accepted = onToggle(day, habit, feedback ?? {
       x: rect.x + rect.width / 2,
@@ -572,15 +585,15 @@ export function CircularTracker({
                   <path
                     key={sector.day}
                     d={annularSectorPath(center, center, inner, outer, sector.startAngle, sector.endAngle)}
-                    className={`day-cell sweep-item ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''} ${unavailable ? 'is-unavailable' : ''}`}
+                    className={`day-cell sweep-item ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''} ${unavailable ? 'is-unavailable' : ''} ${readOnly ? 'is-read-only' : ''}`}
                     style={sweepStyle(sweepProgress(sector.midAngle), unavailable ? { fill: `url(#${unavailablePatternId})` } : undefined)}
                     data-cell={`${habitIndex}-${sector.day}`}
                     data-date={dateKey(month, sector.day)}
-                    role="button"
-                    tabIndex={focused.habit === habitIndex && focused.day === sector.day ? 0 : -1}
-                    aria-label={`${habit.name}, ${formatFullDate(month, sector.day)}${unavailable ? `, unavailable until ${availableFrom}` : ''}`}
-                    aria-pressed={done}
-                    aria-disabled={future || unavailable}
+                    role={readOnly ? undefined : 'button'}
+                    tabIndex={!readOnly && focused.habit === habitIndex && focused.day === sector.day ? 0 : -1}
+                    aria-label={`${habit.name}, ${formatFullDate(month, sector.day)}, ${done ? 'done' : 'not done'}${unavailable ? `, unavailable until ${availableFrom}` : ''}`}
+                    aria-pressed={readOnly ? undefined : done}
+                    aria-disabled={readOnly || future || unavailable}
                     aria-describedby={active ? 'cell-tooltip' : undefined}
                     onPointerEnter={(event) => {
                       if (event.pointerType === 'touch') return
@@ -594,8 +607,8 @@ export function CircularTracker({
                       }
                     }}
                     onBlur={() => setHovered(null)}
-                    onKeyDown={(event) => keyboard(event, habitIndex, sector.day)}
-                    onClick={(event) => {
+                    onKeyDown={readOnly ? undefined : (event) => keyboard(event, habitIndex, sector.day)}
+                    onClick={readOnly ? undefined : (event) => {
                       setFocused({ habit: habitIndex, day: sector.day })
                       event.currentTarget.focus({ preventScroll: true })
                       const nativeEvent = event.nativeEvent
@@ -623,7 +636,7 @@ export function CircularTracker({
               key={sector.day}
               className={`day-label sweep-item ${isToday ? 'is-today' : ''} ${noteOpen ? 'is-note-open' : ''}`}
               style={sweepStyle(sweepProgress(sector.midAngle))}
-              role="button"
+              role={notesEnabled ? 'button' : undefined}
               tabIndex={notesEnabled ? 0 : -1}
               aria-label={`${dailyNotes[noteKey] ? 'Edit' : 'Open'} note for ${formatFullDate(month, sector.day)}`}
               aria-expanded={noteOpen}
@@ -662,6 +675,8 @@ export function CircularTracker({
           future={isFutureDate(month, hovered.day, today)}
           unavailable={!isHabitAvailableOnDate(state, month, hovered.day, hovered.habit.id)}
           availableFrom={habitAvailableFrom(state, hovered.habit)}
+          readOnly={readOnly}
+          ownerUsername={ownerUsername}
         />
       )}
       {selectedDayForMonth && notesEnabled && (

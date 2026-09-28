@@ -22,6 +22,7 @@ import { normalizeSearchQuery, normalizeUsername } from './username.js'
 
 const BODY_LIMIT_BYTES = 800 * 1024
 const SEARCH_LIMIT = 20
+const FOLLOWING_LIMIT = 100
 
 interface BuildAppOptions {
   store?: DataStore
@@ -73,6 +74,24 @@ async function authenticatedUser(
   return { user: authenticated.user, tokenHash: authenticated.session.tokenHash }
 }
 
+async function optionalAuthenticatedUsername(
+  store: DataStore,
+  request: FastifyRequest,
+  now: () => Date,
+): Promise<string | null> {
+  if (!request.headers.authorization) return null
+  const authenticated = await authenticate(store, request.headers.authorization, now())
+  return authenticated.user.username
+}
+
+function publicTracker(user: UserRecord) {
+  return {
+    ...user.tracker,
+    // Reminders are personal prompts rather than part of the shared practice.
+    reminders: [],
+  }
+}
+
 function authPayload(user: UserRecord, token?: string) {
   return {
     ...(token ? { token } : {}),
@@ -118,7 +137,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       callback(null, origin === undefined || allowedOrigins.has(origin))
     },
     credentials: false,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     maxAge: 600,
   })
@@ -224,6 +243,68 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return { account: publicAccount(updated) }
   })
 
+  app.get('/v1/me/social', async (request) => {
+    const { user } = await authenticatedUser(store, request, now)
+    const [followers, following] = await Promise.all([
+      store.countFollowers(user.username),
+      store.countFollowing(user.username),
+    ])
+    return { followers, following }
+  })
+
+  app.get('/v1/me/following', async (request) => {
+    const { user } = await authenticatedUser(store, request, now)
+    const usernames = await store.listFollowingUsernames(user.username, FOLLOWING_LIMIT)
+    const followedUsers = await Promise.all(usernames.map((username) => store.getUser(username)))
+    const profiles = followedUsers.flatMap((followedUser) => {
+      if (!followedUser?.isPublic) return []
+      return [{
+        username: followedUser.username,
+        title: followedUser.searchSummary.title,
+        habitCount: followedUser.searchSummary.habitCount,
+        updatedAt: followedUser.updatedAt,
+      }]
+    })
+    return { profiles }
+  })
+
+  app.put('/v1/me/following/:username', async (request) => {
+    const { user } = await authenticatedUser(store, request, now)
+    const params = request.params as { username?: unknown }
+    let followedUsername: string
+    try {
+      followedUsername = normalizeUsername(params.username)
+    } catch {
+      throw notFound()
+    }
+    if (followedUsername === user.username) {
+      throw new ApiError(400, 'CANNOT_FOLLOW_SELF', 'You cannot follow your own profile.')
+    }
+    const followedUser = await store.getUser(followedUsername)
+    if (!followedUser?.isPublic) throw notFound()
+    await store.followUser(user.username, followedUsername, now().toISOString())
+    return {
+      following: true,
+      followerCount: await store.countFollowers(followedUsername),
+    }
+  })
+
+  app.delete('/v1/me/following/:username', async (request) => {
+    const { user } = await authenticatedUser(store, request, now)
+    const params = request.params as { username?: unknown }
+    let followedUsername: string
+    try {
+      followedUsername = normalizeUsername(params.username)
+    } catch {
+      throw notFound()
+    }
+    await store.unfollowUser(user.username, followedUsername)
+    return {
+      following: false,
+      followerCount: await store.countFollowers(followedUsername),
+    }
+  })
+
   app.get(
     '/v1/profiles',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
@@ -254,6 +335,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const month = parseMonth(queryObject.month)
       const user = await store.getUser(username)
       if (!user?.isPublic) throw notFound()
+      const viewerUsername = await optionalAuthenticatedUsername(store, request, now)
       const habits = resolveHabitPlan(user.tracker, month)
       // Public profiles may become private at any time; do not retain a copy.
       reply.header('cache-control', 'no-store')
@@ -264,6 +346,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           habits: habits.map((habit) => habit.name),
           month: month.key,
           stats: monthStats(user.tracker, month),
+          tracker: publicTracker(user),
+          followerCount: await store.countFollowers(user.username),
+          isFollowing: viewerUsername === null || viewerUsername === user.username
+            ? false
+            : await store.isFollowing(viewerUsername, user.username),
           joinedAt: user.createdAt,
           updatedAt: user.updatedAt,
         },

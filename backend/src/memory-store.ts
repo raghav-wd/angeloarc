@@ -10,6 +10,7 @@ function clone<T>(value: T): T {
 export class MemoryStore implements DataStore {
   readonly #users = new Map<string, UserRecord>()
   readonly #sessions = new Map<string, SessionRecord>()
+  readonly #following = new Map<string, Map<string, string>>()
 
   async createUser(user: UserRecord): Promise<void> {
     if (this.#users.has(user.username)) throw new UsernameTakenError()
@@ -72,6 +73,47 @@ export class MemoryStore implements DataStore {
         habitCount: user.searchSummary.habitCount,
         updatedAt: user.updatedAt,
       }))
+  }
+
+  async followUser(
+    followerUsername: string,
+    followedUsername: string,
+    createdAt: string,
+  ): Promise<boolean> {
+    const following = this.#following.get(followerUsername) ?? new Map<string, string>()
+    if (following.has(followedUsername)) return false
+    following.set(followedUsername, createdAt)
+    this.#following.set(followerUsername, following)
+    return true
+  }
+
+  async unfollowUser(followerUsername: string, followedUsername: string): Promise<boolean> {
+    const following = this.#following.get(followerUsername)
+    if (!following) return false
+    return following.delete(followedUsername)
+  }
+
+  async isFollowing(followerUsername: string, followedUsername: string): Promise<boolean> {
+    return this.#following.get(followerUsername)?.has(followedUsername) ?? false
+  }
+
+  async listFollowingUsernames(username: string, limit: number): Promise<string[]> {
+    return [...(this.#following.get(username)?.entries() ?? [])]
+      .sort((left, right) => right[1].localeCompare(left[1]) || left[0].localeCompare(right[0]))
+      .slice(0, limit)
+      .map(([followedUsername]) => followedUsername)
+  }
+
+  async countFollowers(username: string): Promise<number> {
+    let count = 0
+    for (const following of this.#following.values()) {
+      if (following.has(username)) count += 1
+    }
+    return count
+  }
+
+  async countFollowing(username: string): Promise<number> {
+    return this.#following.get(username)?.size ?? 0
   }
 
   async close(): Promise<void> {

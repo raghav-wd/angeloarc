@@ -185,6 +185,60 @@ export class FirestoreStore implements DataStore {
     return snapshot.docs.map((document) => profileSummaryFromData(document.data()))
   }
 
+  async followUser(
+    followerUsername: string,
+    followedUsername: string,
+    createdAt: string,
+  ): Promise<boolean> {
+    const reference = this.#users.doc(followerUsername).collection('following').doc(followedUsername)
+    try {
+      await reference.create({ followedUsername, createdAt: timestamp(createdAt) })
+      return true
+    } catch (error) {
+      if (firestoreCode(error) === 6 || firestoreCode(error) === '6' || firestoreCode(error) === 'ALREADY_EXISTS') {
+        return false
+      }
+      throw error
+    }
+  }
+
+  async unfollowUser(followerUsername: string, followedUsername: string): Promise<boolean> {
+    const reference = this.#users.doc(followerUsername).collection('following').doc(followedUsername)
+    const snapshot = await reference.get()
+    if (!snapshot.exists) return false
+    await reference.delete()
+    return true
+  }
+
+  async isFollowing(followerUsername: string, followedUsername: string): Promise<boolean> {
+    const snapshot = await this.#users.doc(followerUsername).collection('following').doc(followedUsername).get()
+    return snapshot.exists
+  }
+
+  async listFollowingUsernames(username: string, limit: number): Promise<string[]> {
+    const snapshot = await this.#users
+      .doc(username)
+      .collection('following')
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get()
+    return snapshot.docs.map((document) => document.id)
+  }
+
+  async countFollowers(username: string): Promise<number> {
+    const snapshot = await this.#firestore
+      .collectionGroup('following')
+      .where('followedUsername', '==', username)
+      .count()
+      .get()
+    return snapshot.data().count
+  }
+
+  async countFollowing(username: string): Promise<number> {
+    const snapshot = await this.#users.doc(username).collection('following').count().get()
+    return snapshot.data().count
+  }
+
   async close(): Promise<void> {
     await this.#firestore.terminate()
   }

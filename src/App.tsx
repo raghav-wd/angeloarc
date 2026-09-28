@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowUpRight, Check, Eye, Plus, SlidersHorizontal, UsersRound } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Check, Eye, LoaderCircle, Plus, SlidersHorizontal, UserRound, UsersRound } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { AccountLoadingScreen } from './components/AccountLoadingScreen'
+import { AccountPanel } from './components/AccountPanel'
 import { Brand } from './components/Brand'
 import { CircularTracker } from './components/CircularTracker'
 import { CustomCursor } from './components/CustomCursor'
@@ -18,14 +19,19 @@ import { FLASH_REMINDER_MESSAGE, pickReminder } from './lib/flashReminder'
 import { PANEL_EXIT_DURATION, SWEEP_IN_DURATION, SWEEP_OUT_DURATION, SWEEP_STAGGER, TEXT_SWEEP } from './lib/radialSweep'
 import { clearTrackerProgress, dateKey, daysInMonth, formatFullDate, getHabitsForMonth, isFutureDate, isHabitAvailableOnDate, monthKey, toggleCompletion } from './lib/tracker'
 import type { Month, MonthHabit } from './lib/tracker'
+import type { PublicProfile } from './lib/api'
 import './App.css'
 
-type PanelKind = 'settings' | 'social'
+type PanelKind = 'settings' | 'account' | 'people'
 
 // The homepage trades the tracker for a panel through a radial sweep:
 // closed -> out (wheel and copy sweep away clockwise) -> open (panel lives
 // inline) -> exit (panel fades) -> in (wheel sweeps back) -> closed.
 type PanelPhase = 'closed' | 'out' | 'open' | 'exit' | 'in'
+type TrackerSwitchPhase = 'idle' | 'out' | 'in'
+
+const EMPTY_DAILY_VISITS: ReadonlySet<string> = new Set()
+const EMPTY_DAILY_NOTES: Readonly<Record<string, string>> = {}
 
 function sweep(progress: number): CSSProperties {
   return { '--sweep': progress } as CSSProperties
@@ -46,6 +52,11 @@ function App() {
     login,
     logout,
     setProfilePublic,
+    loadPublicProfile,
+    loadFollowingProfiles,
+    loadSocialSummary,
+    followUser,
+    unfollowUser,
   } = useTrackerState()
   const [today, setToday] = useState(() => new Date())
   const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
@@ -53,6 +64,10 @@ function App() {
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [panel, setPanel] = useState<PanelKind | null>(null)
   const [phase, setPhase] = useState<PanelPhase>('closed')
+  const [switchPhase, setSwitchPhase] = useState<TrackerSwitchPhase>('idle')
+  const [viewedProfile, setViewedProfile] = useState<PublicProfile | null>(null)
+  const [relationshipBusy, setRelationshipBusy] = useState(false)
+  const [relationshipError, setRelationshipError] = useState('')
   const [lockReminderVisible, setLockReminderVisible] = useState(false)
   const [flashActive, setFlashActive] = useState(false)
   const [flashMessage, setFlashMessage] = useState(FLASH_REMINDER_MESSAGE)
@@ -60,12 +75,15 @@ function App() {
   const [announcement, setAnnouncement] = useState('')
   const [cursorRejection, setCursorRejection] = useState<CursorRejection | null>(null)
   const flashOpener = useRef<HTMLButtonElement | null>(null)
+  const ownMonth = useRef(month)
   const workspace = useRef<HTMLElement>(null)
   const heading = useRef<HTMLDivElement>(null)
-  const habits = getHabitsForMonth(state, month)
+  const displayState = viewedProfile?.tracker ?? state
+  const viewedProfileIsFollowing = Boolean(account && viewedProfile?.isFollowing)
+  const habits = getHabitsForMonth(displayState, month)
   const dense = habits.length >= 7
   const empty = habits.length === 0
-  const titleWords = state.title.split(' ')
+  const titleWords = displayState.title.split(' ')
   const titleLastWord = titleWords.pop()
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
   const panelShown = phase === 'open' || phase === 'exit'
@@ -94,7 +112,7 @@ function App() {
     const observer = new ResizeObserver(measureTitle)
     observer.observe(title)
     return () => observer.disconnect()
-  }, [authReady, state.title])
+  }, [authReady, displayState.title])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -122,7 +140,25 @@ function App() {
     return () => clearTimeout(timer)
   }, [phase])
 
+  useEffect(() => {
+    if (switchPhase === 'idle') return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const delay = switchPhase === 'out' ? SWEEP_OUT_DURATION : SWEEP_IN_DURATION
+    const timer = setTimeout(() => {
+      if (switchPhase === 'out') {
+        setViewedProfile(null)
+        setMonth(ownMonth.current)
+        setRelationshipError('')
+        setSwitchPhase('in')
+      } else {
+        setSwitchPhase('idle')
+      }
+    }, reduced ? 0 : delay)
+    return () => clearTimeout(timer)
+  }, [switchPhase])
+
   function openPanel(kind: PanelKind) {
+    if (switchPhase !== 'idle') return
     setLockReminderVisible(false)
     if (phase === 'open' && kind === panel) {
       closePanel()
@@ -135,6 +171,50 @@ function App() {
 
   function closePanel() {
     if (phase === 'open') setPhase('exit')
+  }
+
+  function viewProfile(profile: PublicProfile) {
+    if (!viewedProfile) ownMonth.current = month
+    const [yearText, monthText] = profile.month.split('-')
+    setLockReminderVisible(false)
+    setDateNoteOpen(false)
+    setViewedProfile(profile)
+    setRelationshipError('')
+    setMonth({ year: Number(yearText), month: Number(monthText) - 1 })
+  }
+
+  function returnToOwnPractice() {
+    if (!viewedProfile || switchPhase !== 'idle' || phase !== 'closed') return
+    setSwitchPhase('out')
+  }
+
+  async function toggleViewedProfileFollow() {
+    if (!viewedProfile || relationshipBusy) return
+    if (!account) {
+      openPanel('account')
+      return
+    }
+    if (account.username === viewedProfile.username) return
+    setRelationshipBusy(true)
+    setRelationshipError('')
+    try {
+      const response = viewedProfileIsFollowing
+        ? await unfollowUser(viewedProfile.username)
+        : await followUser(viewedProfile.username)
+      setViewedProfile((current) => current && current.username === viewedProfile.username
+        ? { ...current, isFollowing: response.following, followerCount: response.followerCount }
+        : current)
+    } catch (error) {
+      setRelationshipError(error instanceof Error ? error.message : 'That follow could not be updated.')
+    } finally {
+      setRelationshipBusy(false)
+    }
+  }
+
+  function syncViewedRelationship(username: string, following: boolean, followerCount: number) {
+    setViewedProfile((current) => current?.username === username
+      ? { ...current, isFollowing: following, followerCount }
+      : current)
   }
 
   function closeFlash() {
@@ -181,10 +261,11 @@ function App() {
         className={[
           'app',
           dense ? 'is-dense' : '',
-          state.title ? '' : 'no-title',
-          phase === 'out' ? 'is-sweeping-out' : '',
+          displayState.title ? '' : 'no-title',
+          phase === 'out' || switchPhase === 'out' ? 'is-sweeping-out' : '',
           panelShown ? 'is-panel-open' : '',
-          phase === 'in' ? 'is-sweeping-in' : '',
+          phase === 'in' || switchPhase === 'in' ? 'is-sweeping-in' : '',
+          viewedProfile ? 'is-viewing-profile' : '',
         ].join(' ')}
         style={{ '--sweep-stagger': `${SWEEP_STAGGER}ms` } as CSSProperties}
         inert={flashActive}
@@ -193,7 +274,10 @@ function App() {
         <div className="page-grain" aria-hidden="true" />
         <header className="page-header">
           <div className="header-left">
-            <Brand onHome={() => setMonth({ year: today.getFullYear(), month: today.getMonth() })} />
+            <Brand onHome={() => {
+              if (viewedProfile) returnToOwnPractice()
+              else setMonth({ year: today.getFullYear(), month: today.getMonth() })
+            }} />
           </div>
           <div className="header-actions">
             <button
@@ -206,32 +290,68 @@ function App() {
               <span className="settings-hint" aria-hidden="true">Make it yours</span>
             </button>
             <button
-              className="social-trigger"
-              onClick={() => openPanel('social')}
-              aria-label={account ? `Open profiles and account for ${account.username}` : 'Search public profiles or sign in'}
-              aria-expanded={panel === 'social' && (phase === 'out' || phase === 'open')}
+              className="social-trigger account-trigger"
+              onClick={() => openPanel('account')}
+              aria-label={account ? `Open account details for ${account.username}` : 'Sign in or create an account'}
+              aria-expanded={panel === 'account' && (phase === 'out' || phase === 'open')}
             >
-              <UsersRound size={19} strokeWidth={1.35} />
+              <UserRound size={19} strokeWidth={1.35} />
               <span className="social-hint" aria-hidden="true">
-                {!authReady ? 'Restoring account' : account ? `@${account.username}` : 'Find your people'}
+                {!authReady ? 'Restoring account' : account ? `@${account.username}` : 'Sign in'}
               </span>
             </button>
           </div>
         </header>
 
+        <button
+          className="people-trigger"
+          onClick={() => openPanel('people')}
+          aria-label={account ? 'Open the people you follow' : 'Search public profiles'}
+          aria-expanded={panel === 'people' && (phase === 'out' || phase === 'open')}
+        >
+          <UsersRound size={20} strokeWidth={1.35} />
+          <span className="people-trigger-hint" aria-hidden="true">{account ? 'Your circle' : 'Find people'}</span>
+        </button>
+
         <main className="workspace" ref={workspace}>
-          {state.title && (
+          {displayState.title && (
             <div
               ref={heading}
-              className={`hero-heading sweep-item ${state.title.length > 30 ? 'is-long' : ''}`}
+              className={`hero-heading sweep-item ${displayState.title.length > 30 ? 'is-long' : ''}`}
               style={sweep(TEXT_SWEEP.heroHeading)}
             >
-              <p className="eyebrow"><span /> A LITTLE BETTER, EVERY DAY.</p>
+              {viewedProfile && (
+                <div className="viewed-profile-context">
+                  <button type="button" className="return-to-own" onClick={returnToOwnPractice}>
+                    <ArrowLeft size={13} strokeWidth={1.5} /> My practice
+                  </button>
+                  <div className="viewed-profile-identity">
+                    <span className="profile-avatar" aria-hidden="true">{viewedProfile.username.slice(0, 1).toUpperCase()}</span>
+                    <span><strong>@{viewedProfile.username}</strong><small>{viewedProfile.followerCount} {viewedProfile.followerCount === 1 ? 'follower' : 'followers'}</small></span>
+                  </div>
+                  {account?.username !== viewedProfile.username && (
+                    <button
+                      type="button"
+                      className={`follow-button profile-follow-button ${viewedProfileIsFollowing ? 'is-following' : ''}`}
+                      disabled={relationshipBusy}
+                      onClick={() => void toggleViewedProfileFollow()}
+                    >
+                      {relationshipBusy
+                        ? <LoaderCircle className="social-spinner" size={13} />
+                        : viewedProfileIsFollowing
+                          ? <><Check size={13} /> Following</>
+                          : <><Plus size={13} /> {account ? 'Follow' : 'Sign in to follow'}</>}
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="eyebrow"><span /> {viewedProfile ? 'A PRACTICE IN YOUR CIRCLE.' : 'A LITTLE BETTER, EVERY DAY.'}</p>
               <h1>
                 {titleWords.length > 0 && <span>{titleWords.join(' ')} </span>}
                 <em>{titleLastWord}</em>
               </h1>
-              <p className="hero-subtitle">Less thinking. More showing up.</p>
+              <p className="hero-subtitle">{viewedProfile ? `A month in @${viewedProfile.username}'s rhythm.` : 'Less thinking. More showing up.'}</p>
+              {relationshipError && <p className="profile-relationship-error" role="alert">{relationshipError}</p>}
             </div>
           )}
           <div className="tracker-stage">
@@ -242,22 +362,26 @@ function App() {
                   <path d="M50 19A31 31 0 1 1 19 50" />
                   <path d="M50 30A20 20 0 1 1 30 50" />
                 </svg>
-                <h2>Every routine starts <em>somewhere.</em></h2>
-                <p>One small habit is all it takes.</p>
-                <button onClick={() => openPanel('settings')}><Plus size={16} /> Add your first habit</button>
+                <h2>{viewedProfile ? <>A quiet month, <em>for now.</em></> : <>Every routine starts <em>somewhere.</em></>}</h2>
+                <p>{viewedProfile ? `@${viewedProfile.username} has no habits in this month.` : 'One small habit is all it takes.'}</p>
+                {viewedProfile
+                  ? <button onClick={returnToOwnPractice}><ArrowLeft size={16} /> Back to my practice</button>
+                  : <button onClick={() => openPanel('settings')}><Plus size={16} /> Add your first habit</button>}
               </div>
             ) : (
-              <div className="tracker-month-frame" key={`${monthKey(month)}-${habits.map((habit) => habit.id).join('-')}`}>
+              <div className="tracker-month-frame" key={`${viewedProfile?.username ?? 'me'}-${monthKey(month)}-${habits.map((habit) => habit.id).join('-')}`}>
                 <CircularTracker
-                  state={state}
+                  state={displayState}
                   month={month}
                   today={today}
-                  dailyVisits={dailyVisits}
-                  dailyNotes={dailyNotes}
-                  notesEnabled={phase === 'closed' && !flashActive}
+                  dailyVisits={viewedProfile ? EMPTY_DAILY_VISITS : dailyVisits}
+                  dailyNotes={viewedProfile ? EMPTY_DAILY_NOTES : dailyNotes}
+                  notesEnabled={!viewedProfile && phase === 'closed' && switchPhase === 'idle' && !flashActive}
                   onToggle={toggle}
                   onDailyNoteChange={setDailyNote}
                   onNoteVisibilityChange={setDateNoteOpen}
+                  readOnly={Boolean(viewedProfile)}
+                  ownerUsername={viewedProfile?.username}
                 />
               </div>
             )}
@@ -278,25 +402,29 @@ function App() {
             <p className="day-note-copy">{isCurrentMonth ? <>A small step today.<br />A different you tomorrow.</> : <>A little intention.<br />A whole lot of possibility.</>}</p>
             <span className="day-note-line" />
           </aside>
-          <button
-            ref={flashOpener}
-            className="flash-trigger sweep-item"
-            style={sweep(TEXT_SWEEP.flashTrigger)}
-            onClick={() => {
-              setLockReminderVisible(false)
-              setFlashMessage(pickReminder(state.reminders, Math.random))
-              setFlashActive(true)
-            }}
-            aria-label="Flash a push reminder"
-          >
-            <Eye size={19} strokeWidth={1.4} />
-            <span className="flash-trigger-hint" aria-hidden="true">Need a push?</span>
-          </button>
-          <LockReminder
-            paused={phase !== 'closed' || flashActive}
-            visible={lockReminderVisible}
-            onVisibilityChange={setLockReminderVisible}
-          />
+          {!viewedProfile && (
+            <>
+              <button
+                ref={flashOpener}
+                className="flash-trigger sweep-item"
+                style={sweep(TEXT_SWEEP.flashTrigger)}
+                onClick={() => {
+                  setLockReminderVisible(false)
+                  setFlashMessage(pickReminder(state.reminders, Math.random))
+                  setFlashActive(true)
+                }}
+                aria-label="Flash a push reminder"
+              >
+                <Eye size={19} strokeWidth={1.4} />
+                <span className="flash-trigger-hint" aria-hidden="true">Need a push?</span>
+              </button>
+              <LockReminder
+                paused={phase !== 'closed' || flashActive}
+                visible={lockReminderVisible}
+                onVisibilityChange={setLockReminderVisible}
+              />
+            </>
+          )}
         </main>
 
         {panelShown && panel && (
@@ -309,8 +437,8 @@ function App() {
                 onClose={closePanel}
                 onStateChange={setState}
               />
-            ) : (
-              <SocialPanel
+            ) : panel === 'account' ? (
+              <AccountPanel
                 account={account}
                 busy={authBusy}
                 error={authError}
@@ -318,8 +446,24 @@ function App() {
                 onClose={closePanel}
                 onLogin={login}
                 onSignup={signupWithNotes}
-                onLogout={logout}
+                onLogout={async () => {
+                  await logout()
+                  setViewedProfile((current) => current ? { ...current, isFollowing: false } : current)
+                }}
                 onVisibilityChange={setProfilePublic}
+                onLoadSocialSummary={loadSocialSummary}
+              />
+            ) : (
+              <SocialPanel
+                account={account}
+                onClose={closePanel}
+                onOpenAccount={() => openPanel('account')}
+                onLoadProfile={loadPublicProfile}
+                onLoadFollowing={loadFollowingProfiles}
+                onFollow={followUser}
+                onUnfollow={unfollowUser}
+                onViewProfile={viewProfile}
+                onRelationshipChange={syncViewedRelationship}
               />
             )}
           </div>
@@ -332,13 +476,17 @@ function App() {
               <span><i className="legend-undone" /> Not yet</span>
               <span><i className="legend-unavailable" /> Not available</span>
             </div>
-            <p>Click a cell. Keep a promise.</p>
+            <p>{viewedProfile ? `Viewing @${viewedProfile.username}'s shared check-ins.` : 'Click a cell. Keep a promise.'}</p>
           </div>
           <div className="month-nav-slot sweep-item" style={sweep(TEXT_SWEEP.monthNavigation)}>
             <MonthPicker month={month} today={today} onChange={setMonth} />
           </div>
           <div className="footer-signoff sweep-item" style={sweep(TEXT_SWEEP.footerSignoff)}>
-            {state.isDemo ? (
+            {viewedProfile ? (
+              <button className="viewing-label" onClick={() => openPanel('people')}>
+                VIEWING @{viewedProfile.username} <ArrowUpRight size={12} strokeWidth={1.5} />
+              </button>
+            ) : state.isDemo ? (
               <button className="demo-label" onClick={() => openPanel('settings')}>
                 SAMPLE PROGRESS <ArrowUpRight size={12} strokeWidth={1.5} />
               </button>
