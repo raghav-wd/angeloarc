@@ -9,6 +9,7 @@ import { LockReminder } from './components/LockReminder'
 import { MonthPicker } from './components/MonthPicker'
 import { SettingsDialog } from './components/SettingsDialog'
 import { SocialDialog } from './components/SocialDialog'
+import { useDailyVisits } from './hooks/useDailyVisits'
 import { useTrackerState } from './hooks/useTrackerState'
 import { clearTrackerProgress, dateKey, daysInMonth, formatFullDate, getHabitsForMonth, isFutureDate, isHabitAvailableOnDate, monthKey, toggleCompletion } from './lib/tracker'
 import type { Month, MonthHabit } from './lib/tracker'
@@ -31,6 +32,7 @@ function App() {
     setProfilePublic,
   } = useTrackerState()
   const [today, setToday] = useState(() => new Date())
+  const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [activeDialog, setActiveDialog] = useState<'settings' | 'social' | null>(null)
   const [lockReminderVisible, setLockReminderVisible] = useState(false)
@@ -77,9 +79,13 @@ function App() {
   }, [authReady, state.title])
 
   useEffect(() => {
-    const interval = setInterval(() => setToday(new Date()), 60_000)
+    const interval = setInterval(() => {
+      const now = new Date()
+      setToday(now)
+      recordDailyVisit(now)
+    }, 60_000)
     return () => clearInterval(interval)
-  }, [])
+  }, [recordDailyVisit])
 
   useEffect(() => {
     if (activeDialog !== null || !focusAfterDialog.current) return
@@ -194,7 +200,13 @@ function App() {
               </div>
             ) : (
               <div className="tracker-month-frame" key={`${monthKey(month)}-${habits.map((habit) => habit.id).join('-')}`}>
-                <CircularTracker state={state} month={month} today={today} onToggle={toggle} />
+                <CircularTracker
+                  state={state}
+                  month={month}
+                  today={today}
+                  dailyVisits={dailyVisits}
+                  onToggle={toggle}
+                />
               </div>
             )}
           </div>

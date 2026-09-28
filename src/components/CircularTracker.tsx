@@ -30,6 +30,7 @@ interface CircularTrackerProps {
   state: TrackerState
   month: Month
   today: Date
+  dailyVisits: ReadonlySet<string>
   onToggle: (day: number, habit: MonthHabit, feedback: CursorFeedback) => boolean
 }
 
@@ -198,7 +199,7 @@ function ConsistencyScore({
   )
 }
 
-export function CircularTracker({ state, month, today, onToggle }: CircularTrackerProps) {
+export function CircularTracker({ state, month, today, dailyVisits, onToggle }: CircularTrackerProps) {
   const [hovered, setHovered] = useState<HoveredCell | null>(null)
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
   const svg = useRef<SVGSVGElement>(null)
@@ -377,13 +378,16 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
 
         {sectors.map((sector) => {
           const point = polarPoint(center, center, outerRadius + 20, sector.midAngle)
+          const visitDot = polarPoint(center, center, outerRadius + 6, sector.midAngle)
           const isToday = isCurrentMonth && sector.day === today.getDate()
+          const visited = dailyVisits.has(dateKey(month, sector.day))
           return (
             <g key={sector.day} className={`day-label ${isToday ? 'is-today' : ''}`} aria-hidden="true">
-              {isToday && <circle cx={point.x} cy={point.y} r="10" />}
+              {isToday && <circle className="today-marker" cx={point.x} cy={point.y} r="10" />}
               <text x={point.x} y={point.y} textAnchor="middle" dominantBaseline="central">
                 {String(sector.day).padStart(2, '0')}
               </text>
+              {visited && <circle className="day-visit-dot" cx={visitDot.x} cy={visitDot.y} r="1.35" />}
             </g>
           )
         })}
@@ -393,6 +397,7 @@ export function CircularTracker({ state, month, today, onToggle }: CircularTrack
         Use arrow keys to move between days and habits. Press Enter or Space to mark a habit done or undone.
         Future days are locked until their local calendar date.
         Zig-zag cells predate the tracker or habit and cannot be checked off.
+        A black dot between a date and the tracker means you visited ANGELO on that day.
         Consistency is completed check-ins divided by check-ins available in the displayed month.
       </p>
       {hovered && (

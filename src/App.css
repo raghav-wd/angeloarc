@@ -496,7 +496,11 @@
   fill: #858585;
 }
 
-.day-label.is-today circle {
+.day-label.is-today .today-marker {
+  fill: #262626;
+}
+
+.day-visit-dot {
   fill: #262626;
 }
 
