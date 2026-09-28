@@ -621,7 +621,8 @@ export function CircularTracker({
           return (
             <g
               key={sector.day}
-              className={`day-label ${isToday ? 'is-today' : ''} ${noteOpen ? 'is-note-open' : ''}`}
+              className={`day-label sweep-item ${isToday ? 'is-today' : ''} ${noteOpen ? 'is-note-open' : ''}`}
+              style={sweepStyle(sweepProgress(sector.midAngle))}
               role="button"
               tabIndex={notesEnabled ? 0 : -1}
               aria-label={`${dailyNotes[noteKey] ? 'Edit' : 'Open'} note for ${formatFullDate(month, sector.day)}`}
