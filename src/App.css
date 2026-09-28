@@ -333,7 +333,6 @@
 .workspace {
   position: absolute;
   inset: 50px 0 116px;
-  transition: right 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hero-heading {
@@ -1016,6 +1015,16 @@
     visibility 0s 140ms;
 }
 
+.is-people-open .day-note {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s 180ms;
+}
+
 .day-note-heading {
   display: flex;
   align-items: center;
@@ -1066,7 +1075,6 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: end;
-  transition: right 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .footer-guide,
@@ -1558,7 +1566,7 @@ svg .sweep-item {
   top: 50%;
   right: 60px;
   display: flex;
-  width: min(370px, calc(100vw - 150px));
+  width: min(350px, calc(100vw - 150px));
   max-height: min(620px, calc(100dvh - 142px));
   overflow: hidden;
   border: 1px solid #d6d6d6;
@@ -1600,20 +1608,6 @@ svg .sweep-item {
 .is-sweeping-out .people-drawer,
 .is-sweeping-in .people-drawer {
   pointer-events: none;
-}
-
-@media (min-width: 961px) {
-  .is-people-open .workspace {
-    right: 470px;
-  }
-
-  .is-people-open .page-footer {
-    right: 470px;
-  }
-
-  .is-people-open .tracker-month-frame {
-    max-width: calc(100% - 34px);
-  }
 }
 
 .settings-header,

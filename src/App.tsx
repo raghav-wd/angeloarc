@@ -432,7 +432,7 @@ function App() {
           <aside
             className={`day-note sweep-item ${lockReminderVisible ? 'is-hidden' : ''} ${dateNoteOpen ? 'is-date-note-open' : ''}`}
             style={sweep(TEXT_SWEEP.dayNote)}
-            aria-hidden={lockReminderVisible || dateNoteOpen}
+            aria-hidden={peopleOpen || lockReminderVisible || dateNoteOpen}
           >
             <div className="day-note-heading"><span />{isCurrentMonth ? 'TODAY IS A GOOD DAY' : 'ONE DAY AT A TIME'}</div>
             <p className="day-counter">{isCurrentMonth ? String(today.getDate()).padStart(2, '0') : String(daysInMonth(month)).padStart(2, '0')}<span> / {daysInMonth(month)}</span></p>
