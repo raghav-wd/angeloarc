@@ -165,13 +165,14 @@
   position: absolute;
   z-index: 12;
   top: 50%;
-  right: 43px;
+  right: 0;
   display: grid;
   place-items: center;
-  width: 43px;
-  height: 43px;
+  width: 48px;
+  height: 48px;
   border: 1px solid #d1d1d1;
-  border-radius: 50%;
+  border-right: 0;
+  border-radius: 16px 0 0 16px;
   background: #fafafadb;
   box-shadow: 0 4px 18px #00000008;
   transform: translateY(-50%);
@@ -182,6 +183,28 @@
   border-color: #929292;
   background: white;
   transform: translate(-2px, -50%);
+}
+
+.people-trigger:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.people-trigger:disabled:hover {
+  border-color: #d1d1d1;
+  background: #fafafadb;
+  transform: translateY(-50%);
+}
+
+.is-people-open .people-trigger {
+  border-color: #272727;
+  background: #272727;
+  color: white;
+}
+
+.is-people-open .people-trigger:hover {
+  border-color: #111;
+  background: #111;
 }
 
 .people-trigger-hint {
@@ -310,6 +333,7 @@
 .workspace {
   position: absolute;
   inset: 50px 0 116px;
+  transition: right 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hero-heading {
@@ -1042,6 +1066,7 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: end;
+  transition: right 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .footer-guide,
@@ -1527,6 +1552,70 @@ svg .sweep-item {
   width: min(660px, 100%);
 }
 
+.people-drawer {
+  position: absolute;
+  z-index: 11;
+  top: 50%;
+  right: 60px;
+  display: flex;
+  width: min(370px, calc(100vw - 150px));
+  max-height: min(620px, calc(100dvh - 142px));
+  overflow: hidden;
+  border: 1px solid #d6d6d6;
+  border-radius: 16px;
+  background: #fafafaf5;
+  box-shadow: 0 24px 65px #00000018, 0 4px 16px #0000000a;
+  transform: translateY(-50%);
+  animation: people-drawer-arrive 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  backdrop-filter: blur(16px);
+}
+
+.people-drawer .people-panel {
+  width: 100%;
+  max-height: inherit;
+}
+
+.people-drawer .social-header {
+  padding: 22px 22px 18px;
+}
+
+.people-drawer .social-header h2 {
+  font-size: 27px;
+}
+
+.people-drawer .people-toolbar {
+  padding-inline: 22px;
+}
+
+.people-drawer .social-body {
+  padding-right: 22px;
+  padding-bottom: 22px;
+  padding-left: 22px;
+}
+
+.people-drawer .people-welcome {
+  min-height: 180px;
+}
+
+.is-sweeping-out .people-drawer,
+.is-sweeping-in .people-drawer {
+  pointer-events: none;
+}
+
+@media (min-width: 961px) {
+  .is-people-open .workspace {
+    right: 470px;
+  }
+
+  .is-people-open .page-footer {
+    right: 470px;
+  }
+
+  .is-people-open .tracker-month-frame {
+    max-width: calc(100% - 34px);
+  }
+}
+
 .settings-header,
 .settings-body > section,
 .settings-footer,
@@ -1553,6 +1642,10 @@ svg .sweep-item {
 
 @keyframes inline-panel-exit {
   to { opacity: 0; transform: translateY(9px); }
+}
+
+@keyframes people-drawer-arrive {
+  from { opacity: 0; transform: translate(18px, -50%); }
 }
 
 @keyframes sweep-out-copy {
@@ -2265,6 +2358,11 @@ svg .sweep-item {
 
 .people-row:hover {
   background: #f7f7f7;
+}
+
+.people-row.is-active {
+  background: #f0f0f0;
+  box-shadow: inset 2px 0 #282828;
 }
 
 .people-row:hover .people-profile-button {
@@ -3086,6 +3184,10 @@ svg .sweep-item {
     animation: none;
   }
 
+  .people-drawer {
+    animation: none;
+  }
+
   .day-note,
   .day-note.is-hidden,
   .day-note.is-date-note-open,
@@ -3428,6 +3530,31 @@ svg .sweep-item {
     inset: 78px 16px 16px;
   }
 
+  .people-drawer {
+    right: 56px;
+    width: calc(100vw - 70px);
+    max-height: min(540px, calc(100dvh - 112px));
+    border-radius: 14px;
+  }
+
+  .people-drawer .social-header {
+    padding: 20px 18px 16px;
+  }
+
+  .people-drawer .people-toolbar {
+    padding-inline: 18px;
+  }
+
+  .people-drawer .social-body {
+    padding-right: 18px;
+    padding-bottom: 18px;
+    padding-left: 18px;
+  }
+
+  .people-drawer .profile-result-meta {
+    display: none;
+  }
+
   .settings-header {
     padding: 24px;
   }
@@ -3610,9 +3737,9 @@ svg .sweep-item {
   }
 
   .people-trigger {
-    right: 22px;
-    width: 38px;
-    height: 38px;
+    right: 0;
+    width: 44px;
+    height: 44px;
   }
 
   .people-trigger-hint {

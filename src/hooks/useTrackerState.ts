@@ -338,9 +338,18 @@ export function useTrackerState() {
     }
   }, [])
 
-  const loadPublicProfile = useCallback((username: string, month: string, signal?: AbortSignal) => (
-    getPublicProfile(username, month, signal, tokenRef.current ?? undefined)
-  ), [])
+  const loadPublicProfile = useCallback(async (username: string, month: string, signal?: AbortSignal) => {
+    const token = accountRef.current ? tokenRef.current ?? undefined : undefined
+    try {
+      return await getPublicProfile(username, month, signal, token)
+    } catch (error) {
+      // Public practices should remain viewable when a once-valid session expires.
+      if (token && error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        return getPublicProfile(username, month, signal)
+      }
+      throw error
+    }
+  }, [])
 
   const loadFollowingProfiles = useCallback((signal?: AbortSignal) => {
     const token = tokenRef.current

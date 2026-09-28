@@ -1,8 +1,8 @@
 # ANGELO
 
-ANGELO is a quiet, monochrome habit tracker built with React, TypeScript, and Vite. It works fully as a guest, with the routine stored on the device. An optional account adds cloud sync, a unique username, and a public profile that other people can find from the social button.
+ANGELO is a quiet, monochrome habit tracker built with React, TypeScript, and Vite. It works fully as a guest, with the routine stored on the device. An optional account adds cloud sync, a unique username, and a public profile that other people can find and follow from the people drawer.
 
-Registered profiles are public by default. The public view contains the username, routine title, habit names, and aggregate consistency for the selected month; passwords, sessions, and individual check-in dates are never returned by a public endpoint. A signed-in user can make the profile private.
+Registered profiles are public by default. The public view shares the circular routine layout, habit plans, and check-in history so another person can browse the same monthly practice view. Passwords, sessions, reminder text, and daily notes remain private. A signed-in user can make the profile private.
 
 ## Project layout
 
@@ -126,6 +126,8 @@ The Vite build uses relative asset URLs, so it works at both `OWNER.github.io/RE
 - Signup imports the current guest routine but clears the built-in sample completions before publishing it. Login always loads the account's server state; it never overwrites an existing account with unrelated guest data.
 - Guest and account caches use separate browser-storage keys. Logging out restores the guest routine.
 - Tracker and settings changes save locally as they happen and are debounced to the API for signed-in users. A sync failure does not stop the local tracker from working.
+- The top-right account control is reserved for sign-in, profile visibility, follower totals, and sign-out. The center-right people control opens a compact drawer that defaults to followed profiles and also searches public usernames.
+- Selecting a public profile replaces the current circle through the same clockwise out/in animation. Public circles are read-only; use **My practice** to animate back to the signed-in or guest routine.
 - There is intentionally no email collection or password-recovery flow in this small username-only system. Losing the password means the account cannot currently be recovered.
 
 Rate limiting is per API instance, which is appropriate for the expected small deployment but is not a replacement for a managed edge/WAF if traffic grows substantially.

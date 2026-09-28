@@ -21,6 +21,8 @@ import type {
 
 interface SocialPanelProps {
   account: Account | null
+  activeUsername?: string
+  profileMonth: string
   onClose: () => void
   onOpenAccount: () => void
   onLoadProfile: (username: string, month: string, signal?: AbortSignal) => Promise<PublicProfileResponse>
@@ -37,13 +39,10 @@ function friendlyError(error: unknown, fallback: string): string {
   return fallback
 }
 
-function currentLocalMonth(): string {
-  const now = new Date()
-  return `${String(now.getFullYear()).padStart(4, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
 export function SocialPanel({
   account,
+  activeUsername,
+  profileMonth,
   onClose,
   onOpenAccount,
   onLoadProfile,
@@ -131,9 +130,8 @@ export function SocialPanel({
     setProfileOpening(username)
     setMessage('')
     try {
-      const response = await onLoadProfile(username, currentLocalMonth(), controller.signal)
+      const response = await onLoadProfile(username, profileMonth, controller.signal)
       onViewProfile(response.profile)
-      onClose()
     } catch (requestError) {
       if (requestError instanceof Error && requestError.name === 'AbortError') return
       setMessage(friendlyError(requestError, 'This practice could not be opened.'))
@@ -250,11 +248,17 @@ export function SocialPanel({
             {profiles.map((profile) => {
               const isSelf = profile.username === account?.username
               const isFollowing = relationships.has(profile.username)
+              const isActive = profile.username === activeUsername
               const isOpening = profileOpening === profile.username
               const isUpdating = relationshipBusy === profile.username
               return (
-                <article className="people-row" key={profile.username}>
-                  <button className="people-profile-button" type="button" onClick={() => void openProfile(profile.username)}>
+                <article className={`people-row ${isActive ? 'is-active' : ''}`} key={profile.username}>
+                  <button
+                    className="people-profile-button"
+                    type="button"
+                    aria-current={isActive ? 'true' : undefined}
+                    onClick={() => void openProfile(profile.username)}
+                  >
                     <span className="profile-avatar" aria-hidden="true">{profile.username.slice(0, 1).toUpperCase()}</span>
                     <span className="profile-result-copy">
                       <strong>@{profile.username}</strong>

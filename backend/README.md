@@ -52,12 +52,16 @@ Authenticated routes use `Authorization: Bearer <token>`. Tokens are 32 random b
 - `POST /v1/auth/logout`
 - `PUT /v1/me/tracker` — `{tracker}`
 - `PATCH /v1/me/profile` — `{isPublic}`
+- `GET /v1/me/social` — follower and following totals
+- `GET /v1/me/following` — public profile summaries for followed accounts
+- `PUT /v1/me/following/:username` — follow a public account
+- `DELETE /v1/me/following/:username` — unfollow an account
 - `GET /v1/profiles?query=<username-prefix>`
 - `GET /v1/profiles/:username?month=YYYY-MM`
 
 Errors have the stable shape `{ "error": { "code": "...", "message": "..." } }`. Login always uses the same `INVALID_CREDENTIALS` response for unknown users, malformed usernames, and wrong passwords.
 
-Usernames are normalized to lowercase and must contain 3–24 ASCII letters, numbers, or underscores. Reserved route/system names cannot be registered. Passwords contain 8–128 Unicode code points. Profiles are public on signup and may subsequently be made private.
+Usernames are normalized to lowercase and must contain 3–24 ASCII letters, numbers, or underscores. Reserved route/system names cannot be registered. Passwords contain 8–128 Unicode code points. Profiles are public on signup and may subsequently be made private. A public profile response includes the canonical tracker needed to render its read-only circular layout, but strips reminders; passwords, sessions, and browser-local daily notes are never exposed.
 
 Tracker responses use the version-2 model:
 
@@ -87,7 +91,7 @@ V2 histories may contain at most 1,200 monthly plan snapshots and 45,000 complet
 
 ## Firestore setup
 
-The service stores user documents under `users/{normalizedUsername}` and session documents under `sessions/{sha256Token}`. Each user also has a small top-level `searchSummary` containing only the title and latest plan's habit count. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material, search summary, and the unqueried tracker map from this directory. The tracker exemption is important: a long but valid completion history must not hit Firestore's per-document index-entry limit.
+The service stores user documents under `users/{normalizedUsername}`, session documents under `sessions/{sha256Token}`, and follow edges under `users/{followerUsername}/following/{followedUsername}`. Each user also has a small top-level `searchSummary` containing only the title and latest plan's habit count. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material, search summary, and the unqueried tracker map from this directory. The tracker exemption is important: a long but valid completion history must not hit Firestore's per-document index-entry limit.
 
 Public search uses a Firestore field mask and reads only username, `searchSummary`, and the update timestamp. A narrow legacy fallback reads only V1 title/habits. It never loads password fields, V2 habit-plan history, or the potentially large completion map.
 

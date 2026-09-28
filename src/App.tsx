@@ -22,7 +22,7 @@ import type { Month, MonthHabit } from './lib/tracker'
 import type { PublicProfile } from './lib/api'
 import './App.css'
 
-type PanelKind = 'settings' | 'account' | 'people'
+type PanelKind = 'settings' | 'account'
 
 // The homepage trades the tracker for a panel through a radial sweep:
 // closed -> out (wheel and copy sweep away clockwise) -> open (panel lives
@@ -64,6 +64,7 @@ function App() {
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [panel, setPanel] = useState<PanelKind | null>(null)
   const [phase, setPhase] = useState<PanelPhase>('closed')
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const [switchPhase, setSwitchPhase] = useState<TrackerSwitchPhase>('idle')
   const [viewedProfile, setViewedProfile] = useState<PublicProfile | null>(null)
   const [relationshipBusy, setRelationshipBusy] = useState(false)
@@ -76,14 +77,19 @@ function App() {
   const [cursorRejection, setCursorRejection] = useState<CursorRejection | null>(null)
   const flashOpener = useRef<HTMLButtonElement | null>(null)
   const ownMonth = useRef(month)
+  const pendingProfile = useRef<PublicProfile | null | undefined>(undefined)
+  const switchAnnouncement = useRef('')
+  const focusProfileAfterSwitch = useRef(false)
+  const returnToOwnButton = useRef<HTMLButtonElement | null>(null)
   const workspace = useRef<HTMLElement>(null)
   const heading = useRef<HTMLDivElement>(null)
   const displayState = viewedProfile?.tracker ?? state
+  const displayTitle = displayState.title.trim() || (viewedProfile ? `${viewedProfile.username}'s practice` : '')
   const viewedProfileIsFollowing = Boolean(account && viewedProfile?.isFollowing)
   const habits = getHabitsForMonth(displayState, month)
   const dense = habits.length >= 7
   const empty = habits.length === 0
-  const titleWords = displayState.title.split(' ')
+  const titleWords = displayTitle.split(' ').filter(Boolean)
   const titleLastWord = titleWords.pop()
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
   const panelShown = phase === 'open' || phase === 'exit'
@@ -112,7 +118,7 @@ function App() {
     const observer = new ResizeObserver(measureTitle)
     observer.observe(title)
     return () => observer.disconnect()
-  }, [authReady, displayState.title])
+  }, [authReady, displayTitle])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -146,12 +152,26 @@ function App() {
     const delay = switchPhase === 'out' ? SWEEP_OUT_DURATION : SWEEP_IN_DURATION
     const timer = setTimeout(() => {
       if (switchPhase === 'out') {
-        setViewedProfile(null)
-        setMonth(ownMonth.current)
+        const nextProfile = pendingProfile.current
+        pendingProfile.current = undefined
+        if (nextProfile) {
+          const [yearText, monthText] = nextProfile.month.split('-')
+          setViewedProfile(nextProfile)
+          setMonth({ year: Number(yearText), month: Number(monthText) - 1 })
+        } else {
+          setViewedProfile(null)
+          setMonth(ownMonth.current)
+        }
         setRelationshipError('')
         setSwitchPhase('in')
       } else {
         setSwitchPhase('idle')
+        if (switchAnnouncement.current) setAnnouncement(switchAnnouncement.current)
+        switchAnnouncement.current = ''
+        if (focusProfileAfterSwitch.current) {
+          focusProfileAfterSwitch.current = false
+          requestAnimationFrame(() => returnToOwnButton.current?.focus({ preventScroll: true }))
+        }
       }
     }, reduced ? 0 : delay)
     return () => clearTimeout(timer)
@@ -160,6 +180,7 @@ function App() {
   function openPanel(kind: PanelKind) {
     if (switchPhase !== 'idle') return
     setLockReminderVisible(false)
+    setPeopleOpen(false)
     if (phase === 'open' && kind === panel) {
       closePanel()
       return
@@ -173,18 +194,31 @@ function App() {
     if (phase === 'open') setPhase('exit')
   }
 
+  function togglePeopleDrawer() {
+    if (phase !== 'closed' || switchPhase !== 'idle') return
+    setLockReminderVisible(false)
+    setPeopleOpen((current) => !current)
+  }
+
   function viewProfile(profile: PublicProfile) {
+    if (switchPhase !== 'idle' || phase !== 'closed') return
     if (!viewedProfile) ownMonth.current = month
-    const [yearText, monthText] = profile.month.split('-')
     setLockReminderVisible(false)
     setDateNoteOpen(false)
-    setViewedProfile(profile)
     setRelationshipError('')
-    setMonth({ year: Number(yearText), month: Number(monthText) - 1 })
+    pendingProfile.current = profile
+    switchAnnouncement.current = `Now viewing @${profile.username}'s ${profile.month} practice.`
+    if (window.matchMedia('(max-width: 960px)').matches) {
+      focusProfileAfterSwitch.current = true
+      setPeopleOpen(false)
+    }
+    setSwitchPhase('out')
   }
 
   function returnToOwnPractice() {
     if (!viewedProfile || switchPhase !== 'idle' || phase !== 'closed') return
+    pendingProfile.current = null
+    switchAnnouncement.current = 'Now viewing your practice.'
     setSwitchPhase('out')
   }
 
@@ -261,11 +295,12 @@ function App() {
         className={[
           'app',
           dense ? 'is-dense' : '',
-          displayState.title ? '' : 'no-title',
+          displayTitle ? '' : 'no-title',
           phase === 'out' || switchPhase === 'out' ? 'is-sweeping-out' : '',
           panelShown ? 'is-panel-open' : '',
           phase === 'in' || switchPhase === 'in' ? 'is-sweeping-in' : '',
           viewedProfile ? 'is-viewing-profile' : '',
+          peopleOpen ? 'is-people-open' : '',
         ].join(' ')}
         style={{ '--sweep-stagger': `${SWEEP_STAGGER}ms` } as CSSProperties}
         inert={flashActive}
@@ -305,24 +340,26 @@ function App() {
 
         <button
           className="people-trigger"
-          onClick={() => openPanel('people')}
-          aria-label={account ? 'Open the people you follow' : 'Search public profiles'}
-          aria-expanded={panel === 'people' && (phase === 'out' || phase === 'open')}
+          onClick={togglePeopleDrawer}
+          disabled={phase !== 'closed' || switchPhase !== 'idle'}
+          aria-label={`${peopleOpen ? 'Close' : 'Open'} ${account ? 'the people you follow' : 'public profile search'}`}
+          aria-controls="people-drawer"
+          aria-expanded={peopleOpen}
         >
           <UsersRound size={20} strokeWidth={1.35} />
           <span className="people-trigger-hint" aria-hidden="true">{account ? 'Your circle' : 'Find people'}</span>
         </button>
 
         <main className="workspace" ref={workspace}>
-          {displayState.title && (
+          {displayTitle && (
             <div
               ref={heading}
-              className={`hero-heading sweep-item ${displayState.title.length > 30 ? 'is-long' : ''}`}
+              className={`hero-heading sweep-item ${displayTitle.length > 30 ? 'is-long' : ''}`}
               style={sweep(TEXT_SWEEP.heroHeading)}
             >
               {viewedProfile && (
                 <div className="viewed-profile-context">
-                  <button type="button" className="return-to-own" onClick={returnToOwnPractice}>
+                  <button ref={returnToOwnButton} type="button" className="return-to-own" onClick={returnToOwnPractice}>
                     <ArrowLeft size={13} strokeWidth={1.5} /> My practice
                   </button>
                   <div className="viewed-profile-identity">
@@ -437,7 +474,7 @@ function App() {
                 onClose={closePanel}
                 onStateChange={setState}
               />
-            ) : panel === 'account' ? (
+            ) : (
               <AccountPanel
                 account={account}
                 busy={authBusy}
@@ -453,20 +490,32 @@ function App() {
                 onVisibilityChange={setProfilePublic}
                 onLoadSocialSummary={loadSocialSummary}
               />
-            ) : (
-              <SocialPanel
-                account={account}
-                onClose={closePanel}
-                onOpenAccount={() => openPanel('account')}
-                onLoadProfile={loadPublicProfile}
-                onLoadFollowing={loadFollowingProfiles}
-                onFollow={followUser}
-                onUnfollow={unfollowUser}
-                onViewProfile={viewProfile}
-                onRelationshipChange={syncViewedRelationship}
-              />
             )}
           </div>
+        )}
+
+        {peopleOpen && (
+          <aside
+            id="people-drawer"
+            className="people-drawer"
+            aria-label="People you follow and profile search"
+            aria-busy={switchPhase !== 'idle'}
+            inert={switchPhase !== 'idle'}
+          >
+            <SocialPanel
+              account={account}
+              activeUsername={viewedProfile?.username}
+              profileMonth={monthKey(month)}
+              onClose={() => setPeopleOpen(false)}
+              onOpenAccount={() => openPanel('account')}
+              onLoadProfile={loadPublicProfile}
+              onLoadFollowing={loadFollowingProfiles}
+              onFollow={followUser}
+              onUnfollow={unfollowUser}
+              onViewProfile={viewProfile}
+              onRelationshipChange={syncViewedRelationship}
+            />
+          </aside>
         )}
 
         <footer className="page-footer">
@@ -483,7 +532,7 @@ function App() {
           </div>
           <div className="footer-signoff sweep-item" style={sweep(TEXT_SWEEP.footerSignoff)}>
             {viewedProfile ? (
-              <button className="viewing-label" onClick={() => openPanel('people')}>
+              <button className="viewing-label" onClick={() => setPeopleOpen(true)}>
                 VIEWING @{viewedProfile.username} <ArrowUpRight size={12} strokeWidth={1.5} />
               </button>
             ) : state.isDemo ? (
