@@ -1,8 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, LockKeyhole, Plus } from 'lucide-react'
-import type { KeyboardEvent } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import type { CursorFeedback } from './CustomCursor'
+import { habitLabelProgress, sweepProgress, TEXT_SWEEP } from '../lib/radialSweep'
 import {
   annularSectorPath,
   dateKey,
@@ -17,6 +18,10 @@ import {
   polarPoint,
 } from '../lib/tracker'
 import type { Habit, Month, MonthHabit, TrackerState } from '../lib/tracker'
+
+function sweepStyle(progress: number, extra?: CSSProperties): CSSProperties {
+  return { ...extra, '--sweep': progress } as CSSProperties
+}
 
 interface HoveredCell {
   habit: MonthHabit
@@ -106,12 +111,14 @@ function HabitLabel({
   center,
   y,
   active,
+  sweep,
 }: {
   habit: Habit
   index: number
   center: number
   y: number
   active: boolean
+  sweep: number
 }) {
   const text = useRef<SVGTextElement>(null)
   const [displayName, setDisplayName] = useState(habit.name)
@@ -138,7 +145,7 @@ function HabitLabel({
   }, [habit.name])
 
   return (
-    <g className={`habit-label ${active ? 'is-active' : ''}`} aria-hidden="true">
+    <g className={`habit-label sweep-item ${active ? 'is-active' : ''}`} aria-hidden="true" style={sweepStyle(sweep)}>
       <text x={center - 222} y={y} dominantBaseline="central" className="habit-index">
         {String(index + 1).padStart(2, '0')}
       </text>
@@ -181,7 +188,11 @@ function ConsistencyScore({
   }, [stats.percentage])
 
   return (
-    <g className="consistency-score" aria-label={`${stats.percentage}% monthly consistency, ${stats.completed} of ${stats.total} check-ins`}>
+    <g
+      className="consistency-score sweep-item"
+      style={sweepStyle(TEXT_SWEEP.consistencyScore)}
+      aria-label={`${stats.percentage}% monthly consistency, ${stats.completed} of ${stats.total} check-ins`}
+    >
       <path
         className="center-spark"
         d={`M${center} ${center - 67}v14M${center - 7} ${center - 60}h14M${center - 4.5} ${center - 64.5}l9 9M${center + 4.5} ${center - 64.5}l-9 9`}
@@ -285,10 +296,10 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
             <path d="M-2 4 L0 2 L2 4 L4 2 L6 4 L8 2 L10 4" fill="none" stroke="#b9b9b6" strokeWidth="0.8" />
           </pattern>
         </defs>
-        <text className="habit-list-heading" x={center - 223} y={center - outerRadius - 16}>
+        <text className="habit-list-heading sweep-item" style={sweepStyle(TEXT_SWEEP.ritualsHeading)} x={center - 223} y={center - outerRadius - 16}>
           THE DAILY RITUALS
         </text>
-        <text className="habit-list-count" x={center - 18} y={center - outerRadius - 16} textAnchor="end">
+        <text className="habit-list-count sweep-item" style={sweepStyle(TEXT_SWEEP.ritualsHeading)} x={center - 18} y={center - outerRadius - 16} textAnchor="end">
           {String(habits.length).padStart(2, '0')}
         </text>
 
@@ -300,6 +311,7 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
             center={center}
             y={center - (outerRadius - index * ringStep - ringWidth / 2)}
             active={hovered?.habit.id === habit.id}
+            sweep={habitLabelProgress(index, habits.length)}
           />
         ))}
 
@@ -315,7 +327,8 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
               y1={from.y}
               x2={to.x}
               y2={to.y}
-              className="week-divider"
+              className="week-divider sweep-item"
+              style={sweepStyle(sweepProgress(angle))}
               aria-hidden="true"
             />
           )
@@ -337,8 +350,8 @@ export function CircularTracker({ state, month, today, dailyVisits, onToggle }: 
                   <path
                     key={sector.day}
                     d={annularSectorPath(center, center, inner, outer, sector.startAngle, sector.endAngle)}
-                    className={`day-cell ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''} ${unavailable ? 'is-unavailable' : ''}`}
-                    style={unavailable ? { fill: `url(#${unavailablePatternId})` } : undefined}
+                    className={`day-cell sweep-item ${done ? 'is-done' : ''} ${isToday ? 'is-today' : ''} ${unavailable ? 'is-unavailable' : ''}`}
+                    style={sweepStyle(sweepProgress(sector.midAngle), unavailable ? { fill: `url(#${unavailablePatternId})` } : undefined)}
                     data-cell={`${habitIndex}-${sector.day}`}
                     data-date={dateKey(month, sector.day)}
                     role="button"

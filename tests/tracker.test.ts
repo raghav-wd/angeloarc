@@ -51,6 +51,7 @@ function stateWith(overrides: Partial<TrackerState> = {}): TrackerState {
       '2026-08': [monthHabit('move', 'Move'), monthHabit('read', 'Read')],
     },
     completions: {},
+    reminders: ['No excuses, just do it.'],
     isDemo: false,
     ...overrides,
   };
@@ -583,6 +584,7 @@ describe('stored V1 migration and strict V2 validation', () => {
         ],
       },
       completions: legacy.completions,
+      reminders: ['No excuses, just do it.'],
       isDemo: false,
     });
     const reparsed = parseStoredState(JSON.stringify(migrated));
@@ -630,6 +632,31 @@ describe('stored V1 migration and strict V2 validation', () => {
     for (const isDemo of [0, 1, 'true', null]) rejectsStored({ ...stateWith(), isDemo });
     for (const startedOn of [null, '', '2026-02-29', '2026-8-01', '2026-08-32']) {
       rejectsStored({ ...stateWith(), startedOn });
+    }
+  });
+
+  it('defaults missing reminders and validates stored reminder sentences', () => {
+    const withoutReminders = stateWith() as unknown as Record<string, unknown>;
+    delete withoutReminders.reminders;
+    assert.deepEqual(
+      parseStoredState(JSON.stringify(withoutReminders)).reminders,
+      ['No excuses, just do it.'],
+    );
+    assert.deepEqual(parseStoredState(JSON.stringify(stateWith({ reminders: [] }))).reminders, []);
+    const custom = ['One more rep.', 'ten words fit right here just fine so keep going'];
+    assert.deepEqual(parseStoredState(JSON.stringify(stateWith({ reminders: custom }))).reminders, custom);
+    for (const reminders of [
+      null,
+      'push',
+      {},
+      Array.from({ length: 11 }, () => 'Go.'),
+      [42],
+      [''],
+      ['   '],
+      ['x'.repeat(81)],
+      ['one two three four five six seven eight nine ten eleven'],
+    ]) {
+      rejectsStored({ ...stateWith(), reminders });
     }
   });
 

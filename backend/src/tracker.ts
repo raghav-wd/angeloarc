@@ -10,6 +10,10 @@ import type {
 export const MAX_HABITS = 9
 export const MAX_HABIT_NAME_LENGTH = 32
 export const MAX_TITLE_LENGTH = 60
+export const MAX_REMINDERS = 10
+export const MAX_REMINDER_WORDS = 10
+export const MAX_REMINDER_LENGTH = 80
+export const DEFAULT_REMINDER = 'No excuses, just do it.'
 export const MAX_TRACKER_BYTES = 704 * 1024
 export const MAX_HABIT_PLANS = 1_200
 export const MAX_COMPLETION_DATES = 45_000
@@ -69,6 +73,25 @@ function validateTitle(value: unknown): string {
 function validateDemoFlag(value: unknown): boolean {
   if (typeof value !== 'boolean') invalidTracker('Tracker isDemo must be a boolean.')
   return value
+}
+
+function validateReminders(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_REMINDERS) {
+    invalidTracker(`Reminders must be an array of at most ${MAX_REMINDERS} sentences.`)
+  }
+  return value.map((reminder: unknown) => {
+    if (
+      typeof reminder !== 'string'
+      || !reminder.trim()
+      || reminder.length > MAX_REMINDER_LENGTH
+      || reminder.trim().split(/\s+/).length > MAX_REMINDER_WORDS
+    ) {
+      invalidTracker(
+        `Each reminder must be 1 to ${MAX_REMINDER_WORDS} words within ${MAX_REMINDER_LENGTH} characters.`,
+      )
+    }
+    return reminder
+  })
 }
 
 function validateHabitId(value: unknown): string {
@@ -181,9 +204,11 @@ function resolvePlanFromRecord(
 }
 
 function validateV2Tracker(value: Record<string, unknown>): TrackerState {
-  if (!hasExactFields(value, ['version', 'title', 'startedOn', 'habitPlans', 'completions', 'isDemo'])) {
+  const requiredFields = ['version', 'title', 'startedOn', 'habitPlans', 'completions', 'isDemo']
+  // Reminders arrived after version 2 shipped, so stored trackers may omit them.
+  if (!hasExactFields(value, requiredFields) && !hasExactFields(value, [...requiredFields, 'reminders'])) {
     invalidTracker(
-      'Tracker must contain exactly version, title, startedOn, habitPlans, completions, and isDemo.',
+      'Tracker must contain exactly version, title, startedOn, habitPlans, completions, and isDemo, plus optional reminders.',
     )
   }
   if (typeof value.startedOn !== 'string' || !isValidDateKey(value.startedOn)) {
@@ -266,6 +291,7 @@ function validateV2Tracker(value: Record<string, unknown>): TrackerState {
     startedOn,
     habitPlans,
     completions,
+    reminders: Object.hasOwn(value, 'reminders') ? validateReminders(value.reminders) : [DEFAULT_REMINDER],
     isDemo: validateDemoFlag(value.isDemo),
   }
 }
@@ -289,6 +315,7 @@ export function migrateLegacyTracker(tracker: LegacyTrackerState): TrackerState 
       })),
     },
     completions: structuredClone(tracker.completions),
+    reminders: [DEFAULT_REMINDER],
     isDemo: tracker.isDemo,
   })
 }
@@ -327,6 +354,7 @@ export function clearDemoProgress(tracker: TrackerState, now: Date = new Date())
     startedOn: today,
     habitPlans: { [month.key]: currentPlan },
     completions: {},
+    reminders: tracker.reminders,
     isDemo: false,
   })
 }
