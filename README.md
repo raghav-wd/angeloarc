@@ -2,7 +2,7 @@
 
 ANGELO is a quiet, monochrome habit tracker built with React, TypeScript, and Vite. It works fully as a guest, with the routine stored on the device. An optional account adds cloud sync, a unique username, and a public profile that other people can find and follow from the people drawer.
 
-Registered profiles are public by default. The public view shares the circular routine layout, habit plans, and check-in history so another person can browse the same monthly practice view. Passwords, sessions, reminder text, and daily notes remain private. A signed-in user can make the profile private.
+Registered profiles are public by default. The public view shares the circular routine layout, habit plans, and check-in history so another person can browse the same monthly practice view. Passwords, sessions, reminder text, daily notes, and notes to self remain private. A signed-in user can make the profile private.
 
 ## Project layout
 
@@ -142,3 +142,11 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 - Settings open on the current month, can switch through tracked months, support up to nine habits per monthly plan, and save every valid change automatically.
 - The first guest visit includes starter habits and clearly labeled sample progress.
 - Keyboard navigation, focus management, reduced motion, and touch input are supported.
+
+## Notes to self
+
+- The center-left crumpled-paper control opens a page for principles, goals, quotes, and other short notes. Crumpled paper balls fall onto the homepage, it comes apart where they land, and the balls settle at the center of the grid in simple shapes: one in the middle, three in a triangle, and so on. Each ball is captioned with its note's title.
+- Clicking a ball unfolds it into a flat sheet of about 70% of the screen for reading and writing. Closing it crumples the sheet back into its spot, and **Throw away** deletes the note after a second click to confirm.
+- Leaving the page rolls every ball off screen before the homepage, settings, account, or people view takes over. **My practice**, the paper-ball control, the ANGELO mark, and Escape all lead back to the homepage.
+- Up to 12 notes are kept, with titles up to 48 characters and text up to 800 characters. A first visit starts with three example notes.
+- Like daily notes, notes to self are saved only on this device and are kept separately for guests and each account. Creating an account copies the guest notes into it, and they are never shared on a public profile.

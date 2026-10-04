@@ -10,10 +10,14 @@ import type { CursorFeedback, CursorRejection } from './components/CustomCursor'
 import { FlashReminder } from './components/FlashReminder'
 import { LockReminder } from './components/LockReminder'
 import { MonthPicker } from './components/MonthPicker'
+import { PaperBallIcon } from './components/PaperBallIcon'
+import { PaperNotes } from './components/PaperNotes'
+import type { PaperNotesPhase } from './components/PaperNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SocialPanel } from './components/SocialPanel'
 import { mergeGuestNotesIntoAccount, useDailyNotes } from './hooks/useDailyNotes'
 import { useDailyVisits } from './hooks/useDailyVisits'
+import { mergeGuestPaperNotesIntoAccount, usePaperNotes } from './hooks/usePaperNotes'
 import { useTrackerState } from './hooks/useTrackerState'
 import { FLASH_REMINDER_MESSAGE, pickReminder } from './lib/flashReminder'
 import { PANEL_EXIT_DURATION, SWEEP_IN_DURATION, SWEEP_OUT_DURATION, SWEEP_STAGGER, TEXT_SWEEP } from './lib/radialSweep'
@@ -29,6 +33,11 @@ type PanelKind = 'settings' | 'account'
 // inline) -> exit (panel fades) -> in (wheel sweeps back) -> closed.
 type PanelPhase = 'closed' | 'out' | 'open' | 'exit' | 'in'
 type TrackerSwitchPhase = 'idle' | 'out' | 'in'
+
+// Notes to self replace the homepage: balls drop in as it comes apart, and
+// roll away before whichever page the person picked next takes over.
+type NotesPhase = 'closed' | PaperNotesPhase
+type NotesDestination = 'home' | PanelKind | 'people'
 
 const EMPTY_DAILY_VISITS: ReadonlySet<string> = new Set()
 const EMPTY_DAILY_NOTES: Readonly<Record<string, string>> = {}
@@ -61,6 +70,7 @@ function App() {
   const [today, setToday] = useState(() => new Date())
   const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
   const { dailyNotes, setDailyNote, notesStorageError } = useDailyNotes(account?.username)
+  const { paperNotes, savePaperNote, deletePaperNote, paperNotesStorageError } = usePaperNotes(account?.username)
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [panel, setPanel] = useState<PanelKind | null>(null)
   const [phase, setPhase] = useState<PanelPhase>('closed')
@@ -75,6 +85,14 @@ function App() {
   const [dateNoteOpen, setDateNoteOpen] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [cursorRejection, setCursorRejection] = useState<CursorRejection | null>(null)
+  const [notesPhase, setNotesPhase] = useState<NotesPhase>('closed')
+  const [notesFromPanel, setNotesFromPanel] = useState(false)
+  const [paperSheetOpen, setPaperSheetOpen] = useState(false)
+  const notesPhaseRef = useRef<NotesPhase>('closed')
+  const notesDestination = useRef<NotesDestination>('home')
+  const notesTrigger = useRef<HTMLButtonElement>(null)
+  const workspaceLayer = useRef<HTMLDivElement>(null)
+  const footerLayer = useRef<HTMLDivElement>(null)
   const flashOpener = useRef<HTMLButtonElement | null>(null)
   const ownMonth = useRef(month)
   const pendingProfile = useRef<PublicProfile | null | undefined>(undefined)
@@ -93,6 +111,13 @@ function App() {
   const titleLastWord = titleWords.pop()
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
   const panelShown = phase === 'open' || phase === 'exit'
+  const notesActive = notesPhase !== 'closed'
+  // Mid-transition clicks are ignored rather than disabling the trigger, which
+  // would throw keyboard focus off it.
+  const notesTriggerBlocked = notesPhase === 'arriving'
+    || notesPhase === 'leaving'
+    || (notesPhase === 'closed' && (switchPhase !== 'idle' || phase === 'out' || phase === 'exit'))
+  const homeAway = notesPhase === 'open' || notesPhase === 'leaving' || (notesPhase === 'arriving' && notesFromPanel)
   const syncLabel = account
     ? syncStatus === 'restoring'
       ? 'RESTORING ACCOUNT'
@@ -129,6 +154,10 @@ function App() {
     return () => clearInterval(interval)
   }, [recordDailyVisit])
 
+  useLayoutEffect(() => {
+    notesPhaseRef.current = notesPhase
+  }, [notesPhase])
+
   useEffect(() => {
     if (phase === 'closed' || phase === 'open') return
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -137,7 +166,14 @@ function App() {
       if (phase === 'out') {
         setPhase('open')
       } else if (phase === 'exit') {
-        setPhase('in')
+        // A panel closing because notes to self are opening stays away; the
+        // homepage only returns once the notes roll off.
+        if (notesPhaseRef.current === 'closed') {
+          setPhase('in')
+        } else {
+          setPhase('closed')
+          setPanel(null)
+        }
       } else {
         setPhase('closed')
         setPanel(null)
@@ -178,7 +214,11 @@ function App() {
   }, [switchPhase])
 
   function openPanel(kind: PanelKind) {
-    if (switchPhase !== 'idle') return
+    if (notesPhase === 'open' || notesPhase === 'leaving') {
+      leaveNotes(kind)
+      return
+    }
+    if (switchPhase !== 'idle' || notesActive) return
     setLockReminderVisible(false)
     setPeopleOpen(false)
     if (phase === 'open' && kind === panel) {
@@ -195,9 +235,73 @@ function App() {
   }
 
   function togglePeopleDrawer() {
-    if (phase !== 'closed' || switchPhase !== 'idle') return
+    if (notesPhase === 'open' || notesPhase === 'leaving') {
+      leaveNotes('people')
+      return
+    }
+    if (phase !== 'closed' || switchPhase !== 'idle' || notesActive) return
     setLockReminderVisible(false)
     setPeopleOpen((current) => !current)
+  }
+
+  function animateNotesTrigger() {
+    const icon = notesTrigger.current?.querySelector('svg')
+    if (!icon || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    icon.getAnimations().forEach((animation) => animation.cancel())
+    // Squeezed a little tighter, then it springs back.
+    icon.animate([
+      { transform: 'scale(1) rotate(0deg)' },
+      { transform: 'scale(0.72) rotate(-24deg)', offset: 0.3 },
+      { transform: 'scale(1.16) rotate(12deg)', offset: 0.62 },
+      { transform: 'scale(0.96) rotate(-4deg)', offset: 0.82 },
+      { transform: 'scale(1) rotate(0deg)' },
+    ], { duration: 520, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)' })
+  }
+
+  function toggleNotes() {
+    if (notesPhase === 'open') {
+      animateNotesTrigger()
+      leaveNotes('home')
+      return
+    }
+    if (notesTriggerBlocked) return
+    animateNotesTrigger()
+    setLockReminderVisible(false)
+    setPeopleOpen(false)
+    const fromPanel = phase === 'open'
+    setNotesFromPanel(fromPanel)
+    if (fromPanel) setPhase('exit')
+    setNotesPhase('arriving')
+    setAnnouncement('Notes to self.')
+  }
+
+  // While the balls are already rolling away, a later choice of page wins.
+  function leaveNotes(destination: NotesDestination) {
+    if (notesPhase !== 'open' && notesPhase !== 'leaving') return
+    notesDestination.current = destination
+    if (notesPhase === 'leaving') return
+    // The notes page switches its controls off as it leaves, so keyboard focus
+    // moves to the trigger that brought the person here instead of being lost.
+    const focused = document.activeElement
+    if (!focused || focused === document.body || focused.closest('.paper-notes')) {
+      notesTrigger.current?.focus({ preventScroll: true })
+    }
+    setNotesPhase('leaving')
+  }
+
+  function finishNotesExit() {
+    const destination = notesDestination.current
+    notesDestination.current = 'home'
+    setNotesPhase('closed')
+    setNotesFromPanel(false)
+    setPaperSheetOpen(false)
+    if (destination === 'settings' || destination === 'account') {
+      setPanel(destination)
+      setPhase('open')
+      return
+    }
+    setPhase('in')
+    if (destination === 'people') setPeopleOpen(true)
   }
 
   function viewProfile(profile: PublicProfile) {
@@ -259,6 +363,7 @@ function App() {
   async function signupWithNotes(username: string, password: string) {
     await signup(username, password)
     mergeGuestNotesIntoAccount(username)
+    mergeGuestPaperNotesIntoAccount(username)
   }
 
   function toggle(day: number, habit: MonthHabit, feedback: CursorFeedback): boolean {
@@ -301,16 +406,20 @@ function App() {
           phase === 'in' || switchPhase === 'in' ? 'is-sweeping-in' : '',
           viewedProfile ? 'is-viewing-profile' : '',
           peopleOpen ? 'is-people-open' : '',
+          notesPhase === 'arriving' || notesPhase === 'open' ? 'is-notes-open' : '',
+          homeAway ? 'is-home-away' : '',
         ].join(' ')}
         style={{ '--sweep-stagger': `${SWEEP_STAGGER}ms` } as CSSProperties}
-        inert={flashActive}
+        inert={flashActive || paperSheetOpen}
       >
         <div className="ambient-grid" aria-hidden="true" />
         <div className="page-grain" aria-hidden="true" />
         <header className="page-header">
           <div className="header-left">
             <Brand onHome={() => {
-              if (viewedProfile) returnToOwnPractice()
+              if (notesPhase === 'open') leaveNotes('home')
+              else if (notesActive) return
+              else if (viewedProfile) returnToOwnPractice()
               else setMonth({ year: today.getFullYear(), month: today.getMonth() })
             }} />
           </div>
@@ -339,6 +448,18 @@ function App() {
         </header>
 
         <button
+          ref={notesTrigger}
+          className={`notes-trigger ${notesPhase === 'closed' && notesTriggerBlocked ? 'is-waiting' : ''}`}
+          onClick={toggleNotes}
+          aria-disabled={notesTriggerBlocked}
+          aria-label={notesPhase === 'open' ? 'Put your notes to self away' : 'Open your notes to self'}
+          aria-expanded={notesPhase === 'arriving' || notesPhase === 'open'}
+        >
+          <PaperBallIcon size={21} strokeWidth={1.3} />
+          <span className="notes-trigger-hint" aria-hidden="true">{notesPhase === 'open' ? 'Back to practice' : 'Notes to self'}</span>
+        </button>
+
+        <button
           className="people-trigger"
           onClick={togglePeopleDrawer}
           disabled={phase !== 'closed' || switchPhase !== 'idle'}
@@ -350,6 +471,7 @@ function App() {
           <span className="people-trigger-hint" aria-hidden="true">{account ? 'Your circle' : 'Find people'}</span>
         </button>
 
+        <div className="home-layer" ref={workspaceLayer}>
         <main className="workspace" ref={workspace}>
           {displayTitle && (
             <div
@@ -413,7 +535,7 @@ function App() {
                   today={today}
                   dailyVisits={viewedProfile ? EMPTY_DAILY_VISITS : dailyVisits}
                   dailyNotes={viewedProfile ? EMPTY_DAILY_NOTES : dailyNotes}
-                  notesEnabled={!viewedProfile && phase === 'closed' && switchPhase === 'idle' && !flashActive}
+                  notesEnabled={!viewedProfile && phase === 'closed' && switchPhase === 'idle' && !flashActive && !notesActive}
                   onToggle={toggle}
                   onDailyNoteChange={setDailyNote}
                   onNoteVisibilityChange={setDateNoteOpen}
@@ -456,13 +578,14 @@ function App() {
                 <span className="flash-trigger-hint" aria-hidden="true">Need a push?</span>
               </button>
               <LockReminder
-                paused={phase !== 'closed' || flashActive}
+                paused={phase !== 'closed' || flashActive || notesActive}
                 visible={lockReminderVisible}
                 onVisibilityChange={setLockReminderVisible}
               />
             </>
           )}
         </main>
+        </div>
 
         {panelShown && panel && (
           <div className={`inline-panel ${phase === 'exit' ? 'is-leaving' : ''}`}>
@@ -518,6 +641,7 @@ function App() {
           </aside>
         )}
 
+        <div className="home-layer" ref={footerLayer}>
         <footer className="page-footer">
           <div className="footer-guide sweep-item" style={sweep(TEXT_SWEEP.footerGuide)}>
             <div className="legend" aria-label="Cell legend">
@@ -545,8 +669,26 @@ function App() {
             <p>Little by little, a little becomes a lot.</p>
           </div>
         </footer>
-        {(storageError || notesStorageError || syncError) && (
-          <p className="storage-warning" role="alert">{storageError || notesStorageError || syncError}</p>
+        </div>
+
+        {notesActive && (
+          <PaperNotes
+            phase={notesPhase}
+            notes={paperNotes}
+            dissolveTargets={() => notesFromPanel
+              ? []
+              : [workspaceLayer.current, footerLayer.current].filter((layer): layer is HTMLDivElement => Boolean(layer))}
+            storageLabel={paperNotesStorageError ? 'IN THIS TAB ONLY' : 'SAVED ON THIS DEVICE'}
+            onArrived={() => setNotesPhase('open')}
+            onLeft={finishNotesExit}
+            onExit={() => leaveNotes('home')}
+            onSaveNote={savePaperNote}
+            onDeleteNote={deletePaperNote}
+            onSheetChange={setPaperSheetOpen}
+          />
+        )}
+        {(storageError || notesStorageError || paperNotesStorageError || syncError) && (
+          <p className="storage-warning" role="alert">{storageError || notesStorageError || paperNotesStorageError || syncError}</p>
         )}
       </div>
       <div className="sr-only" role="status" aria-live="polite">{announcement}</div>

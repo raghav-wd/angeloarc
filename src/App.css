@@ -231,6 +231,98 @@
   transform: translate(0, -50%);
 }
 
+.notes-trigger {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #d1d1d1;
+  border-left: 0;
+  border-radius: 0 16px 16px 0;
+  background: #fafafadb;
+  box-shadow: 0 4px 18px #00000008;
+  transform: translateY(-50%);
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
+}
+
+.notes-trigger > svg {
+  overflow: visible;
+}
+
+.notes-trigger:hover {
+  border-color: #929292;
+  background: white;
+  transform: translate(2px, -50%);
+}
+
+.notes-trigger[aria-disabled='true'] {
+  cursor: default;
+}
+
+.notes-trigger.is-waiting {
+  opacity: 0.45;
+}
+
+.notes-trigger.is-waiting:hover {
+  border-color: #d1d1d1;
+  background: #fafafadb;
+  transform: translateY(-50%);
+}
+
+.is-notes-open .notes-trigger {
+  border-color: #272727;
+  background: #272727;
+  color: white;
+}
+
+.is-notes-open .notes-trigger:hover {
+  border-color: #111;
+  background: #111;
+}
+
+.notes-trigger-hint {
+  position: absolute;
+  top: 50%;
+  left: 51px;
+  width: max-content;
+  padding: 5px 8px;
+  border: 1px solid #e1e1e1;
+  border-radius: 4px;
+  background: #fafafaf0;
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  color: #777;
+  opacity: 0;
+  transform: translate(-4px, -50%);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.notes-trigger:hover .notes-trigger-hint,
+.notes-trigger:focus-visible .notes-trigger-hint {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+/* The homepage sits in pass-through layers so notes to self can dissolve it. */
+.home-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.home-layer > * {
+  pointer-events: auto;
+}
+
+.is-home-away .home-layer {
+  visibility: hidden;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -3737,6 +3829,16 @@ svg .sweep-item {
   }
 
   .people-trigger-hint {
+    display: none;
+  }
+
+  .notes-trigger {
+    left: 0;
+    width: 44px;
+    height: 44px;
+  }
+
+  .notes-trigger-hint {
     display: none;
   }
 
