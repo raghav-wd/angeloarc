@@ -205,3 +205,20 @@ export function exitDistance(
   if (dy < -1e-6) limits.push((-radius - from.y) / dy)
   return Math.max(0, Math.min(...limits)) + radius
 }
+
+/**
+ * How far a group of balls must roll sideways, all together, so that every
+ * one of them is off screen. Rolling the same distance keeps their spacing,
+ * so the group travels as one. `direction` 1 rolls right; -1 measures how far
+ * to the left a group must start to roll in from off screen.
+ */
+export function groupRollDistance(
+  points: readonly ClusterPoint[],
+  width: number,
+  radius: number,
+  direction: 1 | -1,
+): number {
+  if (points.length === 0) return 0
+  const reach = points.map((point) => (direction > 0 ? width + radius - point.x : point.x + radius))
+  return Math.max(0, ...reach) + radius
+}

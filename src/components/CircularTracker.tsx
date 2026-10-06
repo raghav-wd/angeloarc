@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Check, LockKeyhole, Plus, X } from 'lucide-react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { CursorFeedback } from './CustomCursor'
+import { TODAY_TASKS_ID } from '../lib/dayTasks'
 import { habitLabelProgress, sweepProgress, TEXT_SWEEP } from '../lib/radialSweep'
 import {
   annularSectorPath,
@@ -44,6 +45,11 @@ interface CircularTrackerProps {
   onNoteVisibilityChange: (visible: boolean) => void
   readOnly?: boolean
   ownerUsername?: string
+  /** The day today's task list shows, while that day is on this wheel. */
+  taskDay?: number | null
+  taskDayLeaving?: boolean
+  /** While today's task list is open, dates move the list instead of opening notes. */
+  onTaskDayPick?: (day: number) => void
 }
 
 interface SelectedDay {
@@ -403,6 +409,9 @@ export function CircularTracker({
   onNoteVisibilityChange,
   readOnly = false,
   ownerUsername,
+  taskDay = null,
+  taskDayLeaving = false,
+  onTaskDayPick,
 }: CircularTrackerProps) {
   const [hovered, setHovered] = useState<HoveredCell | null>(null)
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
@@ -422,6 +431,9 @@ export function CircularTracker({
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
   const activeMonthKey = monthKey(month)
   const selectedDayForMonth = selectedDay?.monthKey === activeMonthKey ? selectedDay : null
+  const pickingTaskDay = Boolean(onTaskDayPick)
+  const dateLabelsEnabled = notesEnabled || pickingTaskDay
+  const taskDaySector = taskDay === null ? undefined : sectors[taskDay - 1]
 
   useEffect(() => {
     if (!selectedDay || (notesEnabled && selectedDay.monthKey === activeMonthKey)) return
@@ -460,6 +472,15 @@ export function CircularTracker({
     })
     onNoteVisibilityChange(true)
   }, [activeMonthKey, center, closeDateNote, notesEnabled, onNoteVisibilityChange, selectedDay?.day])
+
+  function activateDate(day: number, point: { x: number; y: number }, trigger: SVGGElement) {
+    if (onTaskDayPick) {
+      setHovered(null)
+      onTaskDayPick(day)
+      return
+    }
+    openDateNote(day, point, trigger)
+  }
 
   function activateCell(element: SVGPathElement, day: number, habit: MonthHabit, feedback?: CursorFeedback) {
     if (readOnly) return
@@ -624,6 +645,16 @@ export function CircularTracker({
           )
         })}
 
+        {taskDaySector && (
+          <g
+            className={`task-day-marker ${taskDayLeaving ? 'is-leaving' : ''}`}
+            style={{ transform: `rotate(${taskDaySector.midAngle + 90}deg)`, transformOrigin: `${center}px ${center}px` }}
+            aria-hidden="true"
+          >
+            <circle cx={center} cy={center - outerRadius - 20} r="13.5" />
+          </g>
+        )}
+
         {sectors.map((sector) => {
           const point = polarPoint(center, center, outerRadius + 20, sector.midAngle)
           const visitDot = polarPoint(center, center, outerRadius + 6, sector.midAngle)
@@ -631,21 +662,26 @@ export function CircularTracker({
           const visited = dailyVisits.has(dateKey(month, sector.day))
           const noteKey = dateKey(month, sector.day)
           const noteOpen = selectedDayForMonth?.day === sector.day
+          const showingTasks = pickingTaskDay && taskDay === sector.day
           return (
             <g
               key={sector.day}
-              className={`day-label sweep-item ${isToday ? 'is-today' : ''} ${noteOpen ? 'is-note-open' : ''}`}
+              className={`day-label sweep-item ${isToday ? 'is-today' : ''} ${noteOpen ? 'is-note-open' : ''} ${showingTasks ? 'is-task-day' : ''}`}
               style={sweepStyle(sweepProgress(sector.midAngle))}
-              role={notesEnabled ? 'button' : undefined}
-              tabIndex={notesEnabled ? 0 : -1}
-              aria-label={`${dailyNotes[noteKey] ? 'Edit' : 'Open'} note for ${formatFullDate(month, sector.day)}`}
-              aria-expanded={noteOpen}
-              aria-controls={noteOpen ? 'date-note-card' : undefined}
-              onClick={(event) => openDateNote(sector.day, point, event.currentTarget)}
+              role={dateLabelsEnabled ? 'button' : undefined}
+              tabIndex={dateLabelsEnabled ? 0 : -1}
+              aria-label={pickingTaskDay
+                ? `Show tasks for ${formatFullDate(month, sector.day)}`
+                : `${dailyNotes[noteKey] ? 'Edit' : 'Open'} note for ${formatFullDate(month, sector.day)}`}
+              aria-expanded={pickingTaskDay ? undefined : noteOpen}
+              aria-current={showingTasks ? 'date' : undefined}
+              aria-controls={pickingTaskDay ? TODAY_TASKS_ID : noteOpen ? 'date-note-card' : undefined}
+              data-task-day-picker={pickingTaskDay ? '' : undefined}
+              onClick={(event) => activateDate(sector.day, point, event.currentTarget)}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return
                 event.preventDefault()
-                if (!event.repeat) openDateNote(sector.day, point, event.currentTarget)
+                if (!event.repeat) activateDate(sector.day, point, event.currentTarget)
               }}
             >
               <circle className="date-label-hit" cx={point.x} cy={point.y} r="12" />
@@ -662,6 +698,7 @@ export function CircularTracker({
       <p id="tracker-keyboard-help" className="sr-only">
         Use arrow keys to move between days and habits. Press Enter or Space to mark a habit done or undone.
         Focus a date label and press Enter or Space to open its daily note.
+        While today&apos;s task list is open, a date label shows that day&apos;s tasks instead.
         Future days are locked until their local calendar date.
         Zig-zag cells predate the tracker or habit and cannot be checked off.
         A black dot between a date and the tracker means you visited ANGELO on that day.

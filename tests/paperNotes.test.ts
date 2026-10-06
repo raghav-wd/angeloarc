@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+  countPaperNotesByKind,
   createPaperNoteDraft,
   createStarterPaperNotes,
   isBlankPaperNote,
+  matchesPaperNoteFilter,
   MAX_PAPER_NOTE_BODY_LENGTH,
   MAX_PAPER_NOTE_TITLE_LENGTH,
   MAX_PAPER_NOTES,
@@ -16,8 +18,10 @@ import {
   parseStoredPaperNotes,
   readPaperNotes,
   removePaperNote,
+  restorePaperNote,
   savePaperNote,
   serializePaperNotes,
+  swapPaperNotes,
   writePaperNotes,
 } from '../src/lib/paperNotes.ts'
 import type { PaperNote } from '../src/lib/paperNotes.ts'
@@ -141,6 +145,54 @@ describe('paper note updates', () => {
     assert.equal(isBlankPaperNote(draft), true)
     assert.equal(isBlankPaperNote({ ...draft, body: 'Something' }), false)
     assert.throws(() => createPaperNoteDraft(NOW, 'bad id'), PaperNotesValidationError)
+  })
+})
+
+describe('rearranging and recovering paper notes', () => {
+  it('swaps exactly two notes and leaves the rest in place', () => {
+    const notes = Object.freeze([note('a'), note('b'), note('c'), note('d')])
+    const swapped = swapPaperNotes(notes, 'b', 'd')
+    assert.deepEqual(swapped.map((item) => item.id), ['a', 'd', 'c', 'b'])
+    assert.deepEqual(notes.map((item) => item.id), ['a', 'b', 'c', 'd'])
+    assert.ok(Object.isFrozen(swapped))
+    assert.deepEqual(swapPaperNotes(swapped, 'b', 'd').map((item) => item.id), ['a', 'b', 'c', 'd'])
+  })
+
+  it('ignores swaps with itself or with a note that is gone', () => {
+    const notes = Object.freeze([note('a'), note('b')])
+    assert.equal(swapPaperNotes(notes, 'a', 'a'), notes)
+    assert.equal(swapPaperNotes(notes, 'a', 'missing'), notes)
+    assert.equal(swapPaperNotes(notes, 'missing', 'b'), notes)
+  })
+
+  it('puts a thrown-away note back where it was', () => {
+    const notes = Object.freeze([note('a'), note('b'), note('c')])
+    const thrown = notes[1]
+    const without = removePaperNote(notes, 'b')
+    assert.deepEqual(restorePaperNote(without, thrown, 1).map((item) => item.id), ['a', 'b', 'c'])
+    assert.deepEqual(restorePaperNote(without, thrown, 0).map((item) => item.id), ['b', 'a', 'c'])
+    assert.deepEqual(restorePaperNote(without, thrown, 99).map((item) => item.id), ['a', 'c', 'b'])
+    assert.deepEqual(restorePaperNote(without, thrown, -4).map((item) => item.id), ['b', 'a', 'c'])
+    assert.deepEqual(restorePaperNote(without, thrown, Number.NaN).map((item) => item.id), ['a', 'c', 'b'])
+    assert.equal(restorePaperNote(notes, thrown, 0), notes)
+  })
+
+  it('refuses to restore invalid notes or overfill the list', () => {
+    assert.throws(() => restorePaperNote([], note('a', { title: '', body: ' ' }), 0), PaperNotesValidationError)
+    const full = Array.from({ length: MAX_PAPER_NOTES }, (_, index) => note(`n${index}`))
+    assert.throws(() => restorePaperNote(full, note('extra'), 0), PaperNotesValidationError)
+  })
+
+  it('counts notes by kind and matches filters', () => {
+    const notes = [
+      note('a', { kind: 'goal' }),
+      note('b', { kind: 'goal' }),
+      note('c', { kind: 'quote' }),
+    ]
+    assert.deepEqual(countPaperNotesByKind(notes), { all: 3, principle: 0, goal: 2, quote: 1, note: 0 })
+    assert.equal(matchesPaperNoteFilter(notes[0], 'all'), true)
+    assert.equal(matchesPaperNoteFilter(notes[0], 'goal'), true)
+    assert.equal(matchesPaperNoteFilter(notes[2], 'goal'), false)
   })
 })
 

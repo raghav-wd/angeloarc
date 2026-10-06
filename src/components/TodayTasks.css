@@ -1,0 +1,288 @@
+/* Today's tasks sit straight on the page, where the day note was: no card,
+   no border, just the list over the grid. */
+.today-tasks {
+  position: absolute;
+  z-index: 7;
+  top: 54%;
+  right: 54px;
+  width: clamp(178px, 15vw, 224px);
+  transform: translateY(-50%);
+  outline: none;
+}
+
+/* A little margin around the list still counts as a click inside it. */
+.today-tasks::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -22px -18px -22px -26px;
+}
+
+.today-tasks-eyebrow,
+.today-tasks-date,
+.today-tasks-list > li,
+.today-tasks-summary {
+  animation: today-tasks-arrive 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--enter-delay, 0ms) both;
+}
+
+.today-tasks.is-leaving .today-tasks-eyebrow,
+.today-tasks.is-leaving .today-tasks-date,
+.today-tasks.is-leaving .today-tasks-list > li,
+.today-tasks.is-leaving .today-tasks-summary {
+  animation: today-tasks-leave 230ms cubic-bezier(0.55, 0, 1, 0.45) var(--leave-delay, 0ms) both;
+}
+
+.today-tasks.is-leaving {
+  pointer-events: none;
+}
+
+.today-tasks-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 6.8px;
+  letter-spacing: 1.3px;
+  color: #7c7c7c;
+  white-space: nowrap;
+}
+
+.today-tasks-eyebrow > i {
+  flex: 0 0 auto;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #888;
+}
+
+.today-tasks-date {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 14px 0 15px;
+  font-size: 33px;
+  font-weight: 400;
+  letter-spacing: -1.4px;
+  line-height: 1;
+}
+
+.today-tasks-day {
+  font-variant-numeric: tabular-nums;
+}
+
+.today-tasks-month {
+  font-size: 12px;
+  letter-spacing: 0;
+  color: #a0a0a0;
+}
+
+.today-tasks-roll {
+  display: inline-grid;
+}
+
+.today-tasks-roll > span {
+  grid-area: 1 / 1;
+}
+
+.today-tasks-roll-in {
+  animation: today-tasks-roll-in 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.today-tasks-roll-out {
+  animation: today-tasks-roll-out 260ms cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+.today-tasks-roll[data-direction='back'] > .today-tasks-roll-in {
+  animation-name: today-tasks-roll-in-back;
+}
+
+.today-tasks-roll[data-direction='back'] > .today-tasks-roll-out {
+  animation-name: today-tasks-roll-out-back;
+}
+
+.today-tasks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.today-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  padding: 6px 0;
+  border-radius: 4px;
+  background: none;
+  color: #353535;
+  font-size: 12.5px;
+  font-weight: 450;
+  line-height: 18px;
+  letter-spacing: 0.02px;
+  text-align: left;
+  transition: color 240ms ease;
+}
+
+.today-task:not([aria-disabled='true']):hover {
+  color: #111;
+}
+
+.today-task[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.today-task:focus-visible {
+  outline-offset: 3px;
+}
+
+.today-task-check {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin-top: 0.5px;
+  overflow: visible;
+}
+
+.today-task-check path {
+  fill: none;
+  stroke: #8d8d8d;
+  stroke-width: 1.35px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 260ms ease, stroke-width 260ms ease;
+}
+
+.today-task:not([aria-disabled='true']):hover .today-task-check path {
+  stroke: #3d3d3d;
+}
+
+.today-task.is-done .today-task-check path,
+.today-task.is-done:not([aria-disabled='true']):hover .today-task-check path {
+  stroke: #1d1d1d;
+  stroke-width: 1.8px;
+}
+
+.today-task-label {
+  min-width: 0;
+}
+
+/* The line is a background so it can be drawn across the words, and across
+   both lines when a long name wraps. It runs in from the left as the task is
+   kept and leaves to the right when it is undone. */
+.today-task-name {
+  background: linear-gradient(#5c5c5c, #5c5c5c) no-repeat right 0 top 56% / 0% 1px;
+  overflow-wrap: anywhere;
+  transition:
+    background-size 460ms cubic-bezier(0.65, 0, 0.35, 1),
+    color 320ms ease;
+}
+
+.today-task.is-done .today-task-name {
+  color: #9c9c9c;
+  background-position: left 0 top 56%;
+  background-size: 100% 1px;
+}
+
+.today-task.is-locked,
+.today-task.is-unavailable {
+  color: #a8a8a8;
+}
+
+.today-task.is-locked .today-task-check path,
+.today-task.is-unavailable .today-task-check path {
+  stroke: #c6c6c6;
+}
+
+.today-task.is-unavailable .today-task-check path {
+  stroke-dasharray: 1.6 2.3;
+}
+
+.today-tasks.is-arriving .today-task-check {
+  animation: today-task-check-arrive 520ms cubic-bezier(0.3, 0.7, 0.3, 1) calc(var(--enter-delay, 0ms) + 110ms) both;
+}
+
+.today-tasks.is-arriving .today-task.is-done .today-task-name {
+  animation: today-task-strike 520ms cubic-bezier(0.65, 0, 0.35, 1) calc(var(--enter-delay, 0ms) + 280ms) both;
+}
+
+.today-tasks-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+  font-size: 6.8px;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #858585;
+  white-space: nowrap;
+}
+
+.today-tasks-progress {
+  position: relative;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 1px;
+  overflow: hidden;
+  background: #d2d2d2;
+}
+
+.today-tasks-progress > i {
+  position: absolute;
+  inset: 0;
+  background: #2a2a2a;
+  transform-origin: left center;
+  transition: transform 640ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes today-tasks-arrive {
+  from { opacity: 0; transform: translateY(10px); filter: blur(2px); }
+}
+
+@keyframes today-tasks-leave {
+  to { opacity: 0; transform: translateY(-7px); filter: blur(1.5px); }
+}
+
+@keyframes today-tasks-roll-in {
+  from { opacity: 0; transform: translateY(0.55em); filter: blur(2px); }
+}
+
+@keyframes today-tasks-roll-out {
+  to { opacity: 0; transform: translateY(-0.55em); filter: blur(2px); }
+}
+
+@keyframes today-tasks-roll-in-back {
+  from { opacity: 0; transform: translateY(-0.55em); filter: blur(2px); }
+}
+
+@keyframes today-tasks-roll-out-back {
+  to { opacity: 0; transform: translateY(0.55em); filter: blur(2px); }
+}
+
+@keyframes today-task-check-arrive {
+  from { opacity: 0; transform: scale(0.45) rotate(-14deg); }
+}
+
+@keyframes today-task-strike {
+  from { background-size: 0% 1px; }
+}
+
+/* Only the layouts with room for the day note have room for its list. */
+@media (max-width: 1099px), (max-height: 540px) {
+  .today-tasks {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .is-dense .today-tasks {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today-tasks *,
+  .today-tasks *::before,
+  .today-tasks *::after {
+    animation-delay: 0s !important;
+    transition-delay: 0s !important;
+  }
+}

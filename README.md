@@ -141,12 +141,27 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 - Habits use effective-dated monthly plans: changing September leaves August intact and applies from September forward until another month has its own plan. A habit first added during the current month begins on that day.
 - Settings open on the current month, can switch through tracked months, support up to nine habits per monthly plan, and save every valid change automatically.
 - The first guest visit includes starter habits and clearly labeled sample progress.
+- The **Today is a good day** note opens today's tasks where it sits: every habit for the day as a plain list on the page, no card around it. Checking a task folds its box into a tick and draws a line through it; unchecking unfolds the tick and the line slides away. Changes show on the wheel straight away.
+- While the list is open, clicking a date on the wheel moves the list to that day: a ring travels round the wheel to the date, and the tasks take on that day in a wave down the list (or up it, going back in time). Future days are locked, and habits that had not started yet are dashed out.
+- Clicking anywhere else, or pressing Escape, puts the list away and brings the note back. Up and down arrow keys move between tasks.
 - Keyboard navigation, focus management, reduced motion, and touch input are supported.
 
 ## Notes to self
 
 - The center-left crumpled-paper control opens a page for principles, goals, quotes, and other short notes. Crumpled paper balls fall onto the homepage, it comes apart where they land, and the balls settle at the center of the grid in simple shapes: one in the middle, three in a triangle, and so on. Each ball is captioned with its note's title.
 - Clicking a ball unfolds it into a flat sheet of about 70% of the screen for reading and writing. Closing it crumples the sheet back into its spot, and **Throw away** deletes the note after a second click to confirm.
+- Pressing and holding a ball picks it up: the cursor morphs into a grabbing hand and a waste-paper bin appears at the right edge. Flicking the ball toward the bin, or letting go over it, bounces it once on the page and drops it in; the note is thrown away, with **Undo** on the bin for a few seconds, which lifts the ball back out to its old spot. Holding a ball over another one morphs the cursor into swap arrows, and letting go there makes the two trade places; the new order is saved. Let go anywhere else and the ball falls back into its spot.
+- The kinds of note are listed down the left (a row of chips on phones) with how many of each are kept. Choosing a kind rolls every other note off the screen together while that kind gathers into its own formation; **All**, the default on every visit, brings them back. A new note starts as the kind being shown.
+- From the keyboard, Delete throws the focused note into the bin, Alt with an arrow key swaps it with its neighbor, and Escape puts a held ball back. On touch screens, picking up, swapping, and throwing come with short vibrations where the browser supports them.
 - Leaving the page rolls every ball off screen before the homepage, settings, account, or people view takes over. **My practice**, the paper-ball control, the ANGELO mark, and Escape all lead back to the homepage.
 - Up to 12 notes are kept, with titles up to 48 characters and text up to 800 characters. A first visit starts with three example notes.
 - Like daily notes, notes to self are saved only on this device and are kept separately for guests and each account. Creating an account copies the guest notes into it, and they are never shared on a public profile.
+
+## Welcome guide
+
+- A browser that has never used ANGELO opens on a full-screen, three-page guide drawn like a sketchbook: hand-drawn doodles that draw themselves on, a dot-grid paper sheet, and Anri, the mascot, as paper stickers whose expression changes with the story.
+- **Why bother** asks about inconsistency and motivation and suggests trying Angelo Arc for a week. **How it works** shows the two blocks: a sticky note listing daily actions that align with goals, and a one-week arc where those actions are tracked. Ticking the demo actions fills today's cells and celebrates when the list is done. **Your first week** closes with the quote "Once you learn to quit, it becomes a habit." and **Continue to app**.
+- Poking Anri makes her hop and say something. Pages turn with **Next**/**Back**, the step dots, the arrow keys, or a sideways swipe on touch screens. **Skip intro** or Escape leaves at any time, without closing anything open underneath.
+- Leaving folds the guide into a small, quiet Anri control in the bottom-right corner, and that control replays the guide at any time. Hovering it shows a hint with Anri peeking over it.
+- The guide is shown once. Finishing or skipping it is remembered on the device, and a guide closed halfway comes back on the next visit. Anyone who used the app before the guide existed is not greeted again; the corner control still opens it.
+- The guide's code, Anri's poses, and the handwriting font load only when it opens, and every page's final state is shown at once when the system asks for reduced motion.

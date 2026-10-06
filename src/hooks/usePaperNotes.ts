@@ -6,8 +6,10 @@ import {
   paperNotesStorageKey,
   parseStoredPaperNotes,
   removePaperNote,
+  restorePaperNote,
   savePaperNote,
   serializePaperNotes,
+  swapPaperNotes,
 } from '../lib/paperNotes.ts'
 import type { PaperNote, PaperNotes } from '../lib/paperNotes.ts'
 
@@ -21,6 +23,8 @@ interface PaperNotesStore {
   subscribe: (listener: () => void) => () => void
   save: (note: PaperNote) => void
   remove: (id: string) => void
+  swap: (firstId: string, secondId: string) => void
+  restore: (note: PaperNote, index: number) => void
   replace: (notes: PaperNotes) => void
   refresh: () => void
   /** True until this scope has stored notes of its own (it shows the starters). */
@@ -146,6 +150,14 @@ function createStore(storageKey: string): PaperNotesStore {
       const next = removePaperNote(snapshot.paperNotes, id)
       if (next !== snapshot.paperNotes) persist(next)
     },
+    swap: (firstId, secondId) => {
+      const next = swapPaperNotes(snapshot.paperNotes, firstId, secondId)
+      if (next !== snapshot.paperNotes) persist(next)
+    },
+    restore: (note, index) => {
+      const next = restorePaperNote(snapshot.paperNotes, note, index)
+      if (next !== snapshot.paperNotes) persist(next)
+    },
     replace: (notes) => {
       persist(notes)
     },
@@ -168,17 +180,23 @@ export function usePaperNotes(username?: string | null): {
   paperNotes: PaperNotes
   savePaperNote: (note: PaperNote) => void
   deletePaperNote: (id: string) => void
+  swapPaperNotes: (firstId: string, secondId: string) => void
+  restorePaperNote: (note: PaperNote, index: number) => void
   paperNotesStorageError: string
 } {
   const store = useMemo(() => storeFor(username), [username])
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const save = useCallback((note: PaperNote) => store.save(note), [store])
   const remove = useCallback((id: string) => store.remove(id), [store])
+  const swap = useCallback((firstId: string, secondId: string) => store.swap(firstId, secondId), [store])
+  const restore = useCallback((note: PaperNote, index: number) => store.restore(note, index), [store])
 
   return {
     paperNotes: snapshot.paperNotes,
     savePaperNote: save,
     deletePaperNote: remove,
+    swapPaperNotes: swap,
+    restorePaperNote: restore,
     paperNotesStorageError: snapshot.paperNotesStorageError,
   }
 }

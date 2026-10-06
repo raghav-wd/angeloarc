@@ -176,7 +176,7 @@
   background: #fafafadb;
   box-shadow: 0 4px 18px #00000008;
   transform: translateY(-50%);
-  transition: background 200ms ease, border-color 200ms ease, transform 200ms ease;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease, transform 200ms ease;
 }
 
 .people-trigger:hover {
@@ -306,6 +306,18 @@
 .notes-trigger:focus-visible .notes-trigger-hint {
   opacity: 1;
   transform: translate(0, -50%);
+}
+
+/* On the notes page the kinds of note sit beside the trigger, so its hint stays out of their way. */
+.is-notes-open .notes-trigger-hint {
+  display: none;
+}
+
+/* The bin takes the right edge while a paper ball is in hand. */
+.app:has(.paper-notes.has-bin) .people-trigger {
+  opacity: 0;
+  transform: translate(14px, -50%);
+  pointer-events: none;
 }
 
 /* The homepage sits in pass-through layers so notes to self can dissolve it. */
@@ -784,15 +796,45 @@
 
 .day-label:hover text,
 .day-label:focus-visible text,
-.day-label.is-note-open text {
+.day-label.is-note-open text,
+.day-label.is-task-day text {
   font-weight: 560;
   fill: #262626;
 }
 
 .day-label.is-today:hover text,
 .day-label.is-today:focus-visible text,
-.day-label.is-today.is-note-open text {
+.day-label.is-today.is-note-open text,
+.day-label.is-today.is-task-day text {
   fill: white;
+}
+
+/* The ring around the date today's task list shows. It travels round the
+   wheel, through the days in between, when another date is picked. */
+.task-day-marker {
+  pointer-events: none;
+  transition: transform 720ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.task-day-marker circle {
+  fill: none;
+  stroke: #262626;
+  stroke-width: 0.9px;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: task-day-marker-arrive 460ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.task-day-marker.is-leaving circle {
+  animation: task-day-marker-leave 220ms ease both;
+}
+
+@keyframes task-day-marker-arrive {
+  from { opacity: 0; transform: scale(0.4); }
+}
+
+@keyframes task-day-marker-leave {
+  to { opacity: 0; transform: scale(0.6); }
 }
 
 .date-note-layer {
@@ -1134,6 +1176,7 @@
 }
 
 .day-counter {
+  display: block;
   margin: 15px 0 10px;
   font-size: 33px;
   font-weight: 400;
@@ -1147,6 +1190,7 @@
 }
 
 .day-note-copy {
+  display: block;
   font-size: 10px;
   line-height: 1.8;
   color: #858585;
@@ -1158,6 +1202,90 @@
   height: 1px;
   margin-top: 21px;
   background: #bfbfbf;
+}
+
+/* The day note opens today's task list. It steps aside a line at a time as
+   the list arrives, and comes back the same way once the list has gone. */
+.day-note-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+}
+
+.day-note-trigger > .day-note-heading,
+.day-note-trigger > .day-counter,
+.day-note-trigger > .day-note-copy,
+.day-note-trigger > .day-note-line {
+  transition:
+    opacity 380ms ease var(--return-delay, 0ms),
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--return-delay, 0ms),
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 200ms ease;
+}
+
+.day-note-trigger > .day-counter {
+  --return-delay: 60ms;
+  --leave-delay: 35ms;
+}
+
+.day-note-trigger > .day-note-copy {
+  --return-delay: 120ms;
+  --leave-delay: 70ms;
+}
+
+.day-note-trigger > .day-note-line {
+  --return-delay: 180ms;
+  --leave-delay: 105ms;
+}
+
+.day-note-trigger:hover .day-note-line,
+.day-note-trigger:focus-visible .day-note-line {
+  width: 30px;
+  background-color: #6f6f6f;
+}
+
+.day-note-hint {
+  position: absolute;
+  bottom: -4px;
+  left: 40px;
+  font-size: 6.8px;
+  letter-spacing: 1.3px;
+  color: #6f6f6f;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.day-note-trigger:hover .day-note-hint,
+.day-note-trigger:focus-visible .day-note-hint {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.day-note.is-tasks-open .day-note-trigger {
+  visibility: hidden;
+  transition: visibility 0s 320ms;
+}
+
+.day-note.is-tasks-open .day-note-trigger > .day-note-heading,
+.day-note.is-tasks-open .day-note-trigger > .day-counter,
+.day-note.is-tasks-open .day-note-trigger > .day-note-copy,
+.day-note.is-tasks-open .day-note-trigger > .day-note-line {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 170ms ease var(--leave-delay, 0ms),
+    transform 220ms cubic-bezier(0.55, 0, 1, 0.45) var(--leave-delay, 0ms);
+}
+
+.day-note.is-tasks-open .day-note-hint {
+  opacity: 0;
 }
 
 .page-footer {
@@ -1582,6 +1710,116 @@
   transform: translateY(0);
 }
 
+/* The welcome guide's replay control keeps to the corner and stays quiet until it's wanted. */
+.onboarding-trigger {
+  position: absolute;
+  z-index: 13;
+  right: 10px;
+  bottom: 16px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  background: none;
+  color: #909090;
+}
+
+.onboarding-trigger-face {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease, transform 200ms ease;
+}
+
+.onboarding-trigger:hover .onboarding-trigger-face,
+.onboarding-trigger:focus-visible .onboarding-trigger-face {
+  border-color: #d4d4d4;
+  background: white;
+  color: #202020;
+  transform: translateY(-1px);
+}
+
+.onboarding-trigger-hint {
+  position: absolute;
+  right: 0;
+  bottom: 38px;
+  display: grid;
+  justify-items: end;
+  width: max-content;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+/* Anri peeks over the top of the hint, paws on its edge. */
+.onboarding-trigger-peek {
+  width: 46px;
+  margin: 0 14px -7px 0;
+  opacity: 0;
+  transform: translateY(70%) scale(0.8);
+  transition: opacity 140ms ease 60ms, transform 420ms cubic-bezier(0.3, 1.5, 0.5, 1) 60ms;
+}
+
+.onboarding-trigger-note {
+  position: relative;
+  z-index: 1;
+  padding: 5px 8px;
+  border: 1px solid #e1e1e1;
+  border-radius: 4px;
+  background: #fafafa;
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  color: #777;
+}
+
+.onboarding-trigger:hover .onboarding-trigger-hint,
+.onboarding-trigger:focus-visible .onboarding-trigger-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.onboarding-trigger:hover .onboarding-trigger-peek,
+.onboarding-trigger:focus-visible .onboarding-trigger-peek {
+  opacity: 1;
+  transform: none;
+}
+
+.onboarding-placeholder {
+  position: fixed;
+  z-index: 140;
+  inset: 0;
+  background: #fbf8f1;
+}
+
+@media (max-width: 1099px) {
+  .onboarding-trigger {
+    right: 6px;
+    bottom: 6px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 600px) {
+  .onboarding-trigger {
+    right: 3px;
+    bottom: 3px;
+    width: 26px;
+    height: 26px;
+  }
+
+  .onboarding-trigger-hint {
+    display: none;
+  }
+}
+
 .is-sweeping-out .workspace,
 .is-sweeping-out .page-footer,
 .is-sweeping-in .workspace,
@@ -1787,6 +2025,15 @@ svg .sweep-item {
 .custom-cursor[data-blocked='true'] > svg {
   transform: none;
   transition: none;
+}
+
+/* A hand holding a paper ball, or the swap arrows, stay upright and full size. */
+.custom-cursor[data-mode]:not([data-mode='pointer']) > svg {
+  transform: none;
+}
+
+.cursor-pose {
+  transform-origin: 3px 3px;
 }
 
 .blocked-cell-feedback {
@@ -3281,6 +3528,19 @@ svg .sweep-item {
   .lock-reminder.is-visible {
     transform: none;
     transition-delay: 0s;
+  }
+
+  .day-note-trigger > *,
+  .day-note.is-tasks-open .day-note-trigger,
+  .day-note.is-tasks-open .day-note-trigger > * {
+    transform: none;
+    transition-delay: 0s;
+  }
+
+  .task-day-marker,
+  .task-day-marker circle {
+    transition: none;
+    animation: none;
   }
 
   .date-note-connector path,

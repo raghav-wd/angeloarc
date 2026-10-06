@@ -104,6 +104,11 @@
   padding: 0;
   border-radius: 50%;
   background: none;
+  /* A long press picks a ball up rather than scrolling or opening a menu. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .paper-ball:disabled {
@@ -244,6 +249,349 @@
   visibility: hidden;
 }
 
+/* Captions wait for their ball to come to rest. */
+.paper-notes .paper-ball-slot[data-moving] .paper-ball-label {
+  opacity: 0;
+  transform: translate(-50%, 3px);
+  transition: opacity 120ms ease, transform 160ms ease;
+}
+
+/* A ball of another kind has rolled off; it keeps no caption and takes no clicks. */
+.paper-ball-slot.is-filtered .paper-ball-label {
+  visibility: hidden;
+}
+
+.paper-ball-slot.is-filtered .paper-ball {
+  pointer-events: none;
+}
+
+/* While handled, a ball is drawn over the others, or between the walls of the bin. */
+.paper-ball-slot[data-gesture='target'] {
+  z-index: 2;
+}
+
+.paper-ball-slot[data-gesture='inside'] {
+  z-index: 10;
+}
+
+.paper-ball-slot[data-gesture='held'],
+.paper-ball-slot[data-gesture='flying'] {
+  z-index: 30;
+}
+
+.paper-notes .paper-ball-slot[data-gesture] .paper-ball .paper-ball-lift {
+  transform: none;
+}
+
+.paper-notes .paper-ball-slot[data-gesture] .paper-ball .paper-ball-shadow > span {
+  opacity: 1;
+  transform: none;
+}
+
+.paper-ball-slot[data-gesture='held']::before,
+.paper-ball-slot[data-gesture='target']::before {
+  position: absolute;
+  top: calc(var(--paper-ball) / -2);
+  left: calc(var(--paper-ball) / -2);
+  box-sizing: border-box;
+  width: var(--paper-ball);
+  height: var(--paper-ball);
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+}
+
+/* The empty spot a held ball came from. */
+.paper-ball-slot[data-gesture='held']::before {
+  border: 1.5px dashed #cbcbcb;
+  animation: paper-spot-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* The spot a held ball will swap into, locked on with a slowly turning ring. */
+.paper-ball-slot[data-gesture='target']::before {
+  inset: auto;
+  top: calc(var(--paper-ball) / -2 - 18px);
+  left: calc(var(--paper-ball) / -2 - 18px);
+  width: calc(var(--paper-ball) + 36px);
+  height: calc(var(--paper-ball) + 36px);
+  border: 1.5px dashed #262626;
+  animation:
+    paper-ring-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    paper-ring-turn 7s linear infinite;
+}
+
+@keyframes paper-spot-in {
+  from {
+    opacity: 0;
+    scale: 0.82;
+  }
+}
+
+@keyframes paper-ring-in {
+  from {
+    opacity: 0;
+    scale: 0.7;
+  }
+}
+
+@keyframes paper-ring-turn {
+  to {
+    rotate: 1turn;
+  }
+}
+
+.paper-notes.is-holding .paper-ball-label {
+  opacity: 0.4;
+  transition: opacity 200ms ease;
+}
+
+.paper-notes.is-holding .paper-ball-slot[data-gesture='target'] .paper-ball-label {
+  opacity: 0.12;
+}
+
+/* Kinds of note, listed down the left; the dot springs to the one shown. */
+.paper-categories {
+  --item: 28px;
+  --title: 19px;
+
+  position: absolute;
+  top: var(--cluster-middle, 50%);
+  left: 76px;
+  width: 116px;
+  opacity: 0;
+  transform: translate(-6px, -50%);
+  transition:
+    opacity 380ms ease,
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.paper-notes.is-settled .paper-categories {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 60ms;
+}
+
+.paper-notes:not(.is-settled) .paper-categories button,
+.paper-notes.has-open-sheet .paper-categories button {
+  pointer-events: none;
+}
+
+.paper-notes.is-leaving .paper-categories,
+.paper-notes.is-settled.has-open-sheet .paper-categories {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.paper-categories-title {
+  height: 10px;
+  margin: 0 0 calc(var(--title) - 10px) 14px;
+  font-size: 6.8px;
+  font-weight: 500;
+  letter-spacing: 1.3px;
+  line-height: 10px;
+  color: #9a9a9a;
+  text-transform: uppercase;
+}
+
+.paper-categories ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.paper-categories button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: var(--item);
+  padding: 0 0 0 14px;
+  border: 0;
+  background: none;
+  font-size: 11.5px;
+  letter-spacing: 0.1px;
+  color: #8b8b8b;
+  text-align: left;
+  transition:
+    color 180ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.paper-categories button:hover,
+.paper-categories button:focus-visible {
+  color: #222;
+  transform: translateX(2px);
+}
+
+.paper-categories button:active {
+  transform: translateX(1px) scale(0.97);
+  transition-duration: 80ms;
+}
+
+.paper-categories button.is-selected {
+  color: #111;
+}
+
+.paper-category-count {
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1.2px;
+  color: #a8a8a8;
+  transition: color 180ms ease;
+}
+
+.paper-categories button.is-selected .paper-category-count {
+  color: #4d4d4d;
+}
+
+.paper-categories-marker {
+  position: absolute;
+  top: calc(var(--title) + var(--item) / 2 - 2.5px);
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1f1f1f;
+  transform: translateY(calc(var(--selected, 0) * var(--item)));
+  transition: transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+/* The waste-paper bin, in two layers so a ball can drop between its walls. */
+.paper-bin-layer {
+  position: absolute;
+  opacity: 0;
+  transform: translate(40px, 12px) scale(0.8) rotate(9deg);
+  /* Pivots on its mouth, so a ball arriving there meets the rim wherever the bin leans. */
+  transform-origin: 50% 15.6%;
+  transition:
+    opacity 200ms ease,
+    transform 440ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  pointer-events: none;
+}
+
+.paper-bin-layer.is-back {
+  z-index: 5;
+}
+
+.paper-bin-layer.is-front {
+  z-index: 20;
+}
+
+.paper-bin-layer[data-shown='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+.paper-bin-layer[data-shown='true'][data-armed] {
+  transform: scale(1.07);
+}
+
+.paper-bin-wobble {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 97%;
+}
+
+.paper-bin-layer svg {
+  display: block;
+  overflow: visible;
+}
+
+.paper-bin-line {
+  fill: none;
+  stroke: #262626;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.paper-bin-ribs,
+.paper-bin-lip {
+  fill: none;
+  stroke: #00000019;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.paper-bin-mouth-shade {
+  fill: #000;
+  opacity: 0.05;
+  transition: opacity 220ms ease;
+}
+
+.paper-bin-layer[data-armed] .paper-bin-mouth-shade {
+  opacity: 0.2;
+}
+
+.paper-bin-poof {
+  fill: none;
+  stroke: #2a2a2a;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  vector-effect: non-scaling-stroke;
+}
+
+.paper-bin-caption {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  font-size: 6.8px;
+  font-weight: 500;
+  letter-spacing: 1.3px;
+  line-height: 1;
+  color: #8a8a8a;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+}
+
+.paper-bin-armed-hint {
+  display: none;
+  color: #111;
+}
+
+.paper-bin-layer[data-armed] .paper-bin-hint {
+  display: none;
+}
+
+.paper-bin-layer[data-armed] .paper-bin-armed-hint {
+  display: inline;
+}
+
+.paper-bin-undo {
+  padding: 6px 11px;
+  border: 1px solid #262626;
+  border-radius: 30px;
+  background: #262626;
+  font-size: 7.5px;
+  font-weight: 500;
+  letter-spacing: 1.2px;
+  color: white;
+  text-transform: uppercase;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.paper-bin-undo:not(:disabled):hover {
+  background: #000;
+}
+
+.paper-bin-undo:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.paper-bin-undo:disabled {
+  opacity: 0.45;
+}
+
 .paper-empty {
   position: absolute;
   top: 50%;
@@ -251,6 +599,17 @@
   width: min(380px, 90%);
   text-align: center;
   transform: translate(-50%, calc(-50% + 8px));
+}
+
+.paper-notes.is-settled .paper-empty.is-filtered {
+  animation: paper-empty-in 460ms cubic-bezier(0.22, 1, 0.36, 1) 380ms both;
+}
+
+@keyframes paper-empty-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px));
+  }
 }
 
 .paper-empty-mark {
@@ -629,6 +988,10 @@
     left: 32px;
   }
 
+  .paper-categories {
+    left: 64px;
+  }
+
   .paper-notes-signoff > p {
     max-width: 160px;
     margin-left: auto;
@@ -701,6 +1064,63 @@
   .paper-ball-label > span {
     font-size: 10.5px;
   }
+
+  .paper-categories {
+    top: 140px;
+    left: 50%;
+    width: max-content;
+    max-width: calc(100% - 32px);
+    transform: translate(-50%, -6px);
+  }
+
+  .paper-notes.is-settled .paper-categories {
+    transform: translate(-50%, 0);
+  }
+
+  .paper-categories-title,
+  .paper-categories-marker {
+    display: none;
+  }
+
+  .paper-categories ul {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .paper-categories button {
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 30px;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+
+  .paper-categories button:hover,
+  .paper-categories button:focus-visible {
+    border-color: #d4d4d4;
+    transform: none;
+  }
+
+  .paper-categories button.is-selected {
+    border-color: #262626;
+    background: #262626;
+    color: white;
+  }
+
+  .paper-categories button.is-selected .paper-category-count {
+    color: #cfcfcf;
+  }
+
+  /* The bin hugs the right edge, so its caption lines up with it rather than spilling off screen. */
+  .paper-bin-caption {
+    right: 0;
+    left: auto;
+    transform: none;
+  }
 }
 
 @media (max-height: 540px) and (min-width: 501px) {
@@ -718,7 +1138,15 @@
   .paper-notes-heading,
   .paper-notes-footer,
   .paper-empty,
-  .paper-ball-label {
+  .paper-ball-label,
+  .paper-categories,
+  .paper-categories-marker,
+  .paper-bin-layer {
     transition: none;
+  }
+
+  .paper-notes.is-settled .paper-empty.is-filtered,
+  .paper-ball-slot[data-gesture]::before {
+    animation: none;
   }
 }

@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, Check, Eye, LoaderCircle, Plus, SlidersHorizontal, UserRound, UsersRound } from 'lucide-react'
 import type { CSSProperties } from 'react'
+import peekArt from './assets/anri/peek.webp'
 import { AccountLoadingScreen } from './components/AccountLoadingScreen'
 import { AccountPanel } from './components/AccountPanel'
+import { AnriIcon } from './components/AnriIcon'
 import { Brand } from './components/Brand'
 import { CircularTracker } from './components/CircularTracker'
 import { CustomCursor } from './components/CustomCursor'
@@ -10,16 +12,21 @@ import type { CursorFeedback, CursorRejection } from './components/CustomCursor'
 import { FlashReminder } from './components/FlashReminder'
 import { LockReminder } from './components/LockReminder'
 import { MonthPicker } from './components/MonthPicker'
+import type { OnboardingSource } from './components/onboarding/Onboarding'
 import { PaperBallIcon } from './components/PaperBallIcon'
 import { PaperNotes } from './components/PaperNotes'
 import type { PaperNotesPhase } from './components/PaperNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SocialPanel } from './components/SocialPanel'
+import { TodayTasks } from './components/TodayTasks'
 import { mergeGuestNotesIntoAccount, useDailyNotes } from './hooks/useDailyNotes'
 import { useDailyVisits } from './hooks/useDailyVisits'
 import { mergeGuestPaperNotesIntoAccount, usePaperNotes } from './hooks/usePaperNotes'
 import { useTrackerState } from './hooks/useTrackerState'
+import { taskDateFor, taskDateKey, TODAY_TASKS_ID } from './lib/dayTasks'
+import type { TaskDate } from './lib/dayTasks'
 import { FLASH_REMINDER_MESSAGE, pickReminder } from './lib/flashReminder'
+import { onboardingStorage, recordOnboardingProgress, shouldShowOnboarding } from './lib/onboarding'
 import { PANEL_EXIT_DURATION, SWEEP_IN_DURATION, SWEEP_OUT_DURATION, SWEEP_STAGGER, TEXT_SWEEP } from './lib/radialSweep'
 import { clearTrackerProgress, dateKey, daysInMonth, formatFullDate, getHabitsForMonth, isFutureDate, isHabitAvailableOnDate, monthKey, toggleCompletion } from './lib/tracker'
 import type { Month, MonthHabit } from './lib/tracker'
@@ -39,14 +46,31 @@ type TrackerSwitchPhase = 'idle' | 'out' | 'in'
 type NotesPhase = 'closed' | PaperNotesPhase
 type NotesDestination = 'home' | PanelKind | 'people'
 
+// Today's task list takes the day note's place until a click lands elsewhere.
+type TasksPhase = 'closed' | 'open' | 'leaving'
+
 const EMPTY_DAILY_VISITS: ReadonlySet<string> = new Set()
 const EMPTY_DAILY_NOTES: Readonly<Record<string, string>> = {}
+
+// The welcome guide is only fetched when someone sees it or reaches for it.
+const loadOnboarding = () => import('./components/onboarding/Onboarding')
+const Onboarding = lazy(() => loadOnboarding().then((module) => ({ default: module.Onboarding })))
+
+function preloadOnboarding() {
+  void loadOnboarding()
+}
 
 function sweep(progress: number): CSSProperties {
   return { '--sweep': progress } as CSSProperties
 }
 
 function App() {
+  // Decided before any other hook runs, while storage still shows whether this
+  // browser has ever used ANGELO.
+  const [onboarding, setOnboarding] = useState<OnboardingSource | null>(
+    () => shouldShowOnboarding(onboardingStorage()) ? 'welcome' : null,
+  )
+  const onboardingTrigger = useRef<HTMLButtonElement>(null)
   const {
     state,
     setState,
@@ -70,7 +94,14 @@ function App() {
   const [today, setToday] = useState(() => new Date())
   const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
   const { dailyNotes, setDailyNote, notesStorageError } = useDailyNotes(account?.username)
-  const { paperNotes, savePaperNote, deletePaperNote, paperNotesStorageError } = usePaperNotes(account?.username)
+  const {
+    paperNotes,
+    savePaperNote,
+    deletePaperNote,
+    swapPaperNotes,
+    restorePaperNote,
+    paperNotesStorageError,
+  } = usePaperNotes(account?.username)
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [panel, setPanel] = useState<PanelKind | null>(null)
   const [phase, setPhase] = useState<PanelPhase>('closed')
@@ -88,6 +119,10 @@ function App() {
   const [notesPhase, setNotesPhase] = useState<NotesPhase>('closed')
   const [notesFromPanel, setNotesFromPanel] = useState(false)
   const [paperSheetOpen, setPaperSheetOpen] = useState(false)
+  const [tasksPhase, setTasksPhase] = useState<TasksPhase>('closed')
+  const [tasksDate, setTasksDate] = useState<TaskDate>(() => taskDateFor(today))
+  const dayNoteTrigger = useRef<HTMLButtonElement>(null)
+  const restoreTasksFocus = useRef(false)
   const notesPhaseRef = useRef<NotesPhase>('closed')
   const notesDestination = useRef<NotesDestination>('home')
   const notesTrigger = useRef<HTMLButtonElement>(null)
@@ -118,6 +153,11 @@ function App() {
     || notesPhase === 'leaving'
     || (notesPhase === 'closed' && (switchPhase !== 'idle' || phase === 'out' || phase === 'exit'))
   const homeAway = notesPhase === 'open' || notesPhase === 'leaving' || (notesPhase === 'arriving' && notesFromPanel)
+  // The list belongs to the homepage of your own practice, so anything that
+  // takes the page over puts it away first.
+  const tasksAllowed = !viewedProfile && phase === 'closed' && switchPhase === 'idle' && !notesActive && !flashActive && !peopleOpen
+  if (tasksPhase === 'open' && !tasksAllowed) setTasksPhase('leaving')
+  const tasksShown = tasksPhase !== 'closed'
   const syncLabel = account
     ? syncStatus === 'restoring'
       ? 'RESTORING ACCOUNT'
@@ -157,6 +197,16 @@ function App() {
   useLayoutEffect(() => {
     notesPhaseRef.current = notesPhase
   }, [notesPhase])
+
+  useEffect(() => {
+    if (onboarding === 'welcome') recordOnboardingProgress(onboardingStorage(), 'started')
+  }, [onboarding])
+
+  useEffect(() => {
+    if (tasksPhase !== 'closed' || !restoreTasksFocus.current) return
+    restoreTasksFocus.current = false
+    dayNoteTrigger.current?.focus({ preventScroll: true })
+  }, [tasksPhase])
 
   useEffect(() => {
     if (phase === 'closed' || phase === 'open') return
@@ -360,6 +410,30 @@ function App() {
     requestAnimationFrame(() => flashOpener.current?.focus({ preventScroll: true }))
   }
 
+  function openOnboarding() {
+    if (onboarding) return
+    setLockReminderVisible(false)
+    setOnboarding('replay')
+  }
+
+  function closeOnboarding() {
+    recordOnboardingProgress(onboardingStorage(), 'done')
+    setOnboarding(null)
+    requestAnimationFrame(() => {
+      const trigger = onboardingTrigger.current
+      if (!trigger) return
+      trigger.focus({ preventScroll: true })
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      // The control catches the guide as it folds into the corner.
+      trigger.querySelector('.onboarding-trigger-face')?.animate([
+        { transform: 'scale(1.5)', color: '#202020', borderColor: '#202020', background: 'white' },
+        { transform: 'scale(0.86)', offset: 0.4 },
+        { transform: 'scale(1.08)', offset: 0.7 },
+        { transform: 'scale(1)' },
+      ], { duration: 640, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)' })
+    })
+  }
+
   async function signupWithNotes(username: string, password: string) {
     await signup(username, password)
     mergeGuestNotesIntoAccount(username)
@@ -367,32 +441,68 @@ function App() {
   }
 
   function toggle(day: number, habit: MonthHabit, feedback: CursorFeedback): boolean {
+    return toggleOn(month, day, habit, feedback)
+  }
+
+  function toggleOn(target: Month, day: number, habit: MonthHabit, feedback: CursorFeedback): boolean {
     const now = new Date()
     const activeState = state.isDemo ? clearTrackerProgress(state, now) : state
-    if (!isHabitAvailableOnDate(activeState, month, day, habit.id)) {
+    if (!isHabitAvailableOnDate(activeState, target, day, habit.id)) {
       if (state.isDemo) setState(activeState)
       setCursorRejection((previous) => ({ ...feedback, id: (previous?.id ?? 0) + 1 }))
-      setAnnouncement(`${habit.name} was not part of your routine on ${formatFullDate(month, day)}.`)
+      setAnnouncement(`${habit.name} was not part of your routine on ${formatFullDate(target, day)}.`)
       return false
     }
-    if (isFutureDate(month, day, now)) {
+    if (isFutureDate(target, day, now)) {
       setCursorRejection((previous) => ({ ...feedback, id: (previous?.id ?? 0) + 1 }))
-      setAnnouncement(`${habit.name} is locked until ${formatFullDate(month, day)}. You can only update today or earlier.`)
+      setAnnouncement(`${habit.name} is locked until ${formatFullDate(target, day)}. You can only update today or earlier.`)
       return false
     }
     setState((previous) => toggleCompletion(
       previous.isDemo ? clearTrackerProgress(previous, now) : previous,
-      month,
+      target,
       day,
       habit.id,
       now,
     ))
-    const wasDone = activeState.completions[dateKey(month, day)]?.includes(habit.id)
+    const wasDone = activeState.completions[dateKey(target, day)]?.includes(habit.id)
     setAnnouncement(`${habit.name}, day ${day}, marked ${wasDone ? 'not done' : 'done'}.`)
     return true
   }
 
+  function openTasks() {
+    if (!tasksAllowed || tasksPhase !== 'closed') return
+    const date = taskDateFor(today)
+    setLockReminderVisible(false)
+    setTasksDate(date)
+    setTasksPhase('open')
+    setAnnouncement(`Showing your tasks for ${formatFullDate(date.month, date.day)}.`)
+  }
+
+  function dismissTasks(restoreFocus: boolean) {
+    if (tasksPhase !== 'open') return
+    restoreTasksFocus.current = restoreFocus
+    setTasksPhase('leaving')
+  }
+
+  function showTasksFor(day: number) {
+    if (tasksPhase !== 'open') return
+    const date = { month, day }
+    if (taskDateKey(date) === taskDateKey(tasksDate)) return
+    setTasksDate(date)
+    setAnnouncement(`Showing your tasks for ${formatFullDate(month, day)}.`)
+  }
+
   if (!authReady) return <AccountLoadingScreen />
+
+  const dayNoteContent = (
+    <>
+      <span className="day-note-heading"><span />{isCurrentMonth ? 'TODAY IS A GOOD DAY' : 'ONE DAY AT A TIME'}</span>
+      <span className="day-counter">{isCurrentMonth ? String(today.getDate()).padStart(2, '0') : String(daysInMonth(month)).padStart(2, '0')}<span> / {daysInMonth(month)}</span></span>
+      <span className="day-note-copy">{isCurrentMonth ? <>A small step today.<br />A different you tomorrow.</> : <>A little intention.<br />A whole lot of possibility.</>}</span>
+      <span className="day-note-line" />
+    </>
+  )
 
   return (
     <>
@@ -410,7 +520,7 @@ function App() {
           homeAway ? 'is-home-away' : '',
         ].join(' ')}
         style={{ '--sweep-stagger': `${SWEEP_STAGGER}ms` } as CSSProperties}
-        inert={flashActive || paperSheetOpen}
+        inert={flashActive || paperSheetOpen || onboarding !== null}
       >
         <div className="ambient-grid" aria-hidden="true" />
         <div className="page-grain" aria-hidden="true" />
@@ -535,12 +645,15 @@ function App() {
                   today={today}
                   dailyVisits={viewedProfile ? EMPTY_DAILY_VISITS : dailyVisits}
                   dailyNotes={viewedProfile ? EMPTY_DAILY_NOTES : dailyNotes}
-                  notesEnabled={!viewedProfile && phase === 'closed' && switchPhase === 'idle' && !flashActive && !notesActive}
+                  notesEnabled={!viewedProfile && phase === 'closed' && switchPhase === 'idle' && !flashActive && !notesActive && !tasksShown}
                   onToggle={toggle}
                   onDailyNoteChange={setDailyNote}
                   onNoteVisibilityChange={setDateNoteOpen}
                   readOnly={Boolean(viewedProfile)}
                   ownerUsername={viewedProfile?.username}
+                  taskDay={tasksShown && !viewedProfile && monthKey(tasksDate.month) === monthKey(month) ? tasksDate.day : null}
+                  taskDayLeaving={tasksPhase === 'leaving'}
+                  onTaskDayPick={tasksPhase === 'open' && !viewedProfile ? showTasksFor : undefined}
                 />
               </div>
             )}
@@ -552,15 +665,40 @@ function App() {
             <span className="note-caption">THAT&apos;S THE WHOLE IDEA.</span>
           </aside>
           <aside
-            className={`day-note sweep-item ${lockReminderVisible ? 'is-hidden' : ''} ${dateNoteOpen ? 'is-date-note-open' : ''}`}
+            className={`day-note sweep-item ${lockReminderVisible ? 'is-hidden' : ''} ${dateNoteOpen ? 'is-date-note-open' : ''} ${tasksShown ? 'is-tasks-open' : ''}`}
             style={sweep(TEXT_SWEEP.dayNote)}
             aria-hidden={peopleOpen || lockReminderVisible || dateNoteOpen}
           >
-            <div className="day-note-heading"><span />{isCurrentMonth ? 'TODAY IS A GOOD DAY' : 'ONE DAY AT A TIME'}</div>
-            <p className="day-counter">{isCurrentMonth ? String(today.getDate()).padStart(2, '0') : String(daysInMonth(month)).padStart(2, '0')}<span> / {daysInMonth(month)}</span></p>
-            <p className="day-note-copy">{isCurrentMonth ? <>A small step today.<br />A different you tomorrow.</> : <>A little intention.<br />A whole lot of possibility.</>}</p>
-            <span className="day-note-line" />
+            {viewedProfile ? (
+              <div className="day-note-body">{dayNoteContent}</div>
+            ) : (
+              <button
+                ref={dayNoteTrigger}
+                type="button"
+                className="day-note-trigger"
+                onClick={openTasks}
+                aria-label="Show today's tasks"
+                aria-expanded={tasksPhase === 'open'}
+                aria-controls={tasksShown ? TODAY_TASKS_ID : undefined}
+              >
+                {dayNoteContent}
+                <span className="day-note-hint" aria-hidden="true">SEE TODAY&apos;S TASKS</span>
+              </button>
+            )}
           </aside>
+          {tasksShown && (
+            <TodayTasks
+              state={state}
+              date={tasksDate}
+              today={today}
+              leaving={tasksPhase === 'leaving'}
+              onToggle={(date, habit, feedback) => {
+                toggleOn(date.month, date.day, habit, feedback)
+              }}
+              onDismiss={dismissTasks}
+              onLeft={() => setTasksPhase('closed')}
+            />
+          )}
           {!viewedProfile && (
             <>
               <button
@@ -578,7 +716,7 @@ function App() {
                 <span className="flash-trigger-hint" aria-hidden="true">Need a push?</span>
               </button>
               <LockReminder
-                paused={phase !== 'closed' || flashActive || notesActive}
+                paused={phase !== 'closed' || flashActive || notesActive || tasksShown || onboarding !== null}
                 visible={lockReminderVisible}
                 onVisibilityChange={setLockReminderVisible}
               />
@@ -684,13 +822,41 @@ function App() {
             onExit={() => leaveNotes('home')}
             onSaveNote={savePaperNote}
             onDeleteNote={deletePaperNote}
+            onSwapNotes={swapPaperNotes}
+            onRestoreNote={restorePaperNote}
             onSheetChange={setPaperSheetOpen}
           />
         )}
+        <button
+          ref={onboardingTrigger}
+          type="button"
+          className="onboarding-trigger"
+          onClick={openOnboarding}
+          onPointerEnter={preloadOnboarding}
+          onFocus={preloadOnboarding}
+          aria-label="Replay the welcome guide"
+        >
+          <span className="onboarding-trigger-hint" aria-hidden="true">
+            <img className="onboarding-trigger-peek" src={peekArt} alt="" draggable={false} decoding="async" />
+            <span className="onboarding-trigger-note">Replay the guide</span>
+          </span>
+          <span className="onboarding-trigger-face">
+            <AnriIcon size={17} strokeWidth={1.35} />
+          </span>
+        </button>
         {(storageError || notesStorageError || paperNotesStorageError || syncError) && (
           <p className="storage-warning" role="alert">{storageError || notesStorageError || paperNotesStorageError || syncError}</p>
         )}
       </div>
+      {onboarding && (
+        <Suspense fallback={onboarding === 'welcome' ? <div className="onboarding-placeholder" aria-hidden="true" /> : null}>
+          <Onboarding
+            source={onboarding}
+            dock={() => onboardingTrigger.current?.getBoundingClientRect() ?? null}
+            onClose={closeOnboarding}
+          />
+        </Suspense>
+      )}
       <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       {flashActive && <FlashReminder message={flashMessage} onClose={closeFlash} />}
       <CustomCursor rejection={cursorRejection} />

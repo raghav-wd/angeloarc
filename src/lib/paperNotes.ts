@@ -6,6 +6,8 @@ export const MAX_PAPER_NOTE_BODY_LENGTH = 800
 export const PAPER_NOTE_KINDS = ['principle', 'goal', 'quote', 'note'] as const
 
 export type PaperNoteKind = (typeof PAPER_NOTE_KINDS)[number]
+/** Which notes the page shows: one kind, or every note. */
+export type PaperNoteFilter = PaperNoteKind | 'all'
 
 export interface PaperNote {
   id: string
@@ -44,6 +46,13 @@ export const PAPER_NOTE_KIND_LABELS: Readonly<Record<PaperNoteKind, string>> = {
   goal: 'Goal',
   quote: 'Quote',
   note: 'Note',
+}
+
+export const PAPER_NOTE_KIND_PLURALS: Readonly<Record<PaperNoteKind, string>> = {
+  principle: 'Principles',
+  goal: 'Goals',
+  quote: 'Quotes',
+  note: 'Notes',
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -211,6 +220,40 @@ export function savePaperNote(notes: PaperNotes, note: PaperNote): PaperNotes {
 export function removePaperNote(notes: PaperNotes, id: string): PaperNotes {
   if (!notes.some((note) => note.id === id)) return notes
   return Object.freeze(notes.filter((note) => note.id !== id))
+}
+
+/** Two notes trade places in the cluster; every other note stays put. */
+export function swapPaperNotes(notes: PaperNotes, firstId: string, secondId: string): PaperNotes {
+  const first = notes.findIndex((note) => note.id === firstId)
+  const second = notes.findIndex((note) => note.id === secondId)
+  if (first === -1 || second === -1 || first === second) return notes
+  const next = [...notes]
+  next[first] = notes[second]
+  next[second] = notes[first]
+  return Object.freeze(next)
+}
+
+/** Puts a thrown-away note back at its old place, or at the end if the list has since shrunk. */
+export function restorePaperNote(notes: PaperNotes, note: PaperNote, index: number): PaperNotes {
+  const valid = validatedNote(note, notes.length)
+  if (notes.some((existing) => existing.id === valid.id)) return notes
+  if (notes.length >= MAX_PAPER_NOTES) {
+    throw new PaperNotesValidationError(`Keep at most ${MAX_PAPER_NOTES} paper notes.`)
+  }
+  const position = Number.isInteger(index) ? Math.min(Math.max(index, 0), notes.length) : notes.length
+  const next = [...notes]
+  next.splice(position, 0, valid)
+  return Object.freeze(next)
+}
+
+export function countPaperNotesByKind(notes: PaperNotes): Record<PaperNoteFilter, number> {
+  const counts: Record<PaperNoteFilter, number> = { all: notes.length, principle: 0, goal: 0, quote: 0, note: 0 }
+  for (const note of notes) counts[note.kind] += 1
+  return counts
+}
+
+export function matchesPaperNoteFilter(note: Pick<PaperNote, 'kind'>, filter: PaperNoteFilter): boolean {
+  return filter === 'all' || note.kind === filter
 }
 
 /** Account notes win on id conflicts; guest notes fill any remaining room. */
