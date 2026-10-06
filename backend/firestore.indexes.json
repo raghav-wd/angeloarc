@@ -31,6 +31,11 @@
       "indexes": []
     },
     {
+      "collectionGroup": "userNotes",
+      "fieldPath": "notes",
+      "indexes": []
+    },
+    {
       "collectionGroup": "following",
       "fieldPath": "followedUsername",
       "indexes": [

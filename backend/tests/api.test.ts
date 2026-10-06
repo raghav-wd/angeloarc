@@ -7,12 +7,17 @@ import { hashSessionToken, SESSION_TTL_MS } from '../src/auth.js'
 import { loadConfig } from '../src/config.js'
 import { MemoryStore } from '../src/memory-store.js'
 import {
+  MAX_NOTES_BYTES,
+  MAX_PAPER_NOTES,
+  validateNotesState,
+} from '../src/notes.js'
+import {
   MAX_COMPLETION_DATES,
   MAX_HABIT_PLANS,
   MAX_TRACKER_BYTES,
   validateTracker,
 } from '../src/tracker.js'
-import type { LegacyTrackerState, MonthHabit, TrackerState } from '../src/types.js'
+import type { LegacyTrackerState, MonthHabit, NotesState, PaperNote, TrackerState } from '../src/types.js'
 
 const PASSWORD = 'a-safe-password'
 const ORIGIN = 'https://app.example.com'
@@ -35,6 +40,12 @@ describe('Firestore index manifest', () => {
     assert.ok(followerField.indexes?.some((index) => (
       index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
     )))
+
+    const notesField = manifest.fieldOverrides?.find((field) => (
+      field.collectionGroup === 'userNotes' && field.fieldPath === 'notes'
+    ))
+    assert.ok(notesField)
+    assert.deepEqual(notesField.indexes, [])
   })
 })
 
@@ -55,6 +66,29 @@ function tracker(overrides: Partial<TrackerState> = {}): TrackerState {
     },
     reminders: ['One more rep.'],
     isDemo: false,
+    ...structuredClone(overrides),
+  }
+}
+
+const NOTE_TIMESTAMP = '2026-09-18T12:34:56.000Z'
+
+function paperNote(overrides: Partial<PaperNote> = {}): PaperNote {
+  return {
+    id: 'note-1',
+    kind: 'note',
+    title: 'Keep this close',
+    body: 'A private thought.',
+    createdAt: NOTE_TIMESTAMP,
+    updatedAt: NOTE_TIMESTAMP,
+    ...overrides,
+  }
+}
+
+function notes(overrides: Partial<NotesState> = {}): NotesState {
+  return {
+    version: 1,
+    dailyNotes: { '2026-09-18': 'A good day.' },
+    paperNotes: [paperNote()],
     ...structuredClone(overrides),
   }
 }
@@ -142,11 +176,17 @@ async function signup(
   app: FastifyInstance,
   username = 'alice',
   value: TrackerState | LegacyTrackerState = tracker(),
+  notesState?: NotesState,
 ) {
   return app.inject({
     method: 'POST',
     url: '/v1/auth/signup',
-    payload: { username, password: PASSWORD, tracker: value },
+    payload: {
+      username,
+      password: PASSWORD,
+      tracker: value,
+      ...(notesState === undefined ? {} : { notes: notesState }),
+    },
   })
 }
 
@@ -281,6 +321,8 @@ describe('signup and credentials', () => {
       reminders: ['One more rep.'],
       isDemo: false,
     })
+    assert.equal(body.notes, null)
+    assert.equal(body.notesRevision, 0)
     assert.equal(JSON.stringify(body).includes('passwordHash'), false)
     assert.equal(JSON.stringify(body).includes('passwordSalt'), false)
 
@@ -290,6 +332,7 @@ describe('signup and credentials', () => {
     assert.notEqual(stored.passwordSalt, PASSWORD)
     assert.equal(stored.passwordHash.length > 40, true)
     assert.equal(stored.passwordSalt.length > 10, true)
+    assert.equal(await store.getNotes('new_user'), null)
 
     assert.equal(await store.getSession(body.token), null)
     assert.ok(await store.getSession(hashSessionToken(body.token)))
@@ -439,6 +482,8 @@ describe('sessions', () => {
     assert.equal(me.json().token, undefined)
     assert.equal(me.json().account.username, 'alice')
     assert.deepEqual(me.json().tracker, tracker())
+    assert.equal(me.json().notes, null)
+    assert.equal(me.json().notesRevision, 0)
     assert.equal(me.headers['cache-control'], 'no-store')
 
     const logout = await app.inject({ method: 'POST', url: '/v1/auth/logout', headers: bearer(token) })
@@ -461,6 +506,260 @@ describe('sessions', () => {
     const expired = await app.inject({ method: 'GET', url: '/v1/auth/me', headers: bearer(token) })
     assert.equal(expired.statusCode, 401)
     assert.equal(await store.getSession(tokenHash), null)
+  })
+})
+
+describe('private cloud notes', () => {
+  it('optionally seeds notes at signup and returns them only on private auth responses', async (context) => {
+    const { app, store } = await testApp()
+    context.after(() => app.close())
+    const seeded = notes({
+      dailyNotes: { '2026-09-18': 'signup-private-daily' },
+      paperNotes: [paperNote({ body: 'signup-private-paper' })],
+    })
+
+    const created = await signup(app, 'noted_user', tracker(), seeded)
+    assert.equal(created.statusCode, 201)
+    assert.deepEqual(created.json().notes, seeded)
+    assert.equal(created.json().notesRevision, 1)
+    assert.deepEqual(await store.getNotes('noted_user'), { notes: seeded, revision: 1 })
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { username: 'noted_user', password: PASSWORD },
+    })
+    assert.equal(login.statusCode, 200)
+    assert.deepEqual(login.json().notes, seeded)
+    assert.equal(login.json().notesRevision, 1)
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      headers: bearer(login.json().token as string),
+    })
+    assert.equal(me.statusCode, 200)
+    assert.deepEqual(me.json().notes, seeded)
+    assert.equal(me.json().notesRevision, 1)
+    assert.equal(me.headers['cache-control'], 'no-store')
+
+    const profile = await app.inject({
+      method: 'GET',
+      url: '/v1/profiles/noted_user?month=2026-09',
+    })
+    assert.equal(profile.statusCode, 200)
+    assert.equal(profile.body.includes('signup-private-daily'), false)
+    assert.equal(profile.body.includes('signup-private-paper'), false)
+    assert.equal(Object.hasOwn(profile.json().profile as object, 'notes'), false)
+
+    const search = await app.inject({ method: 'GET', url: '/v1/profiles?query=noted' })
+    assert.equal(search.statusCode, 200)
+    assert.equal(search.body.includes('signup-private'), false)
+  })
+
+  it('updates only the authenticated owner without changing public profile timestamps', async (context) => {
+    let currentTime = Date.parse('2026-09-19T00:00:00.000Z')
+    const { app, store } = await testApp({ now: () => new Date(currentTime) })
+    context.after(() => app.close())
+    const aliceInitial = notes({ dailyNotes: { '2026-09-18': 'Alice before' } })
+    const bobInitial = notes({ dailyNotes: { '2026-09-18': 'Bob before' } })
+    const alice = await signup(app, 'alice', tracker(), aliceInitial)
+    const bob = await signup(app, 'bob', tracker(), bobInitial)
+    assert.equal(alice.statusCode, 201)
+    assert.equal(bob.statusCode, 201)
+    const aliceToken = alice.json().token as string
+    const originalPublicTimestamp = (await store.getUser('alice'))?.updatedAt
+    currentTime = Date.parse('2026-09-20T01:02:03.000Z')
+    const replacement = notes({
+      dailyNotes: { '2026-09-20': 'Alice after' },
+      paperNotes: [paperNote({ id: 'alice-new', title: 'Changed' })],
+    })
+
+    const anonymous = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/notes',
+      payload: { notes: replacement },
+    })
+    assert.equal(anonymous.statusCode, 401)
+
+    const updated = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/notes',
+      headers: bearer(aliceToken),
+      payload: { notes: replacement, expectedRevision: 1 },
+    })
+    assert.equal(updated.statusCode, 200)
+    assert.deepEqual(updated.json(), { updatedAt: '2026-09-20T01:02:03.000Z', revision: 2 })
+    assert.equal(updated.headers['cache-control'], 'no-store')
+    assert.deepEqual(await store.getNotes('alice'), { notes: replacement, revision: 2 })
+    assert.deepEqual(await store.getNotes('bob'), { notes: bobInitial, revision: 1 })
+    assert.equal((await store.getUser('alice'))?.updatedAt, originalPublicTimestamp)
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      headers: bearer(aliceToken),
+    })
+    assert.deepEqual(me.json().notes, replacement)
+    assert.equal(me.json().notesRevision, 2)
+  })
+
+  it('rejects stale note revisions instead of silently overwriting another session', async (context) => {
+    const { app, store } = await testApp()
+    context.after(() => app.close())
+    const created = await signup(app, 'revision_user')
+    const firstToken = created.json().token as string
+    assert.equal(created.json().notes, null)
+    assert.equal(created.json().notesRevision, 0)
+
+    const secondSession = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { username: 'revision_user', password: PASSWORD },
+    })
+    const secondToken = secondSession.json().token as string
+    assert.equal(secondSession.json().notesRevision, 0)
+
+    const firstState = notes({ dailyNotes: { '2026-09-20': 'First session' } })
+    const secondState = notes({ dailyNotes: { '2026-09-20': 'Second session' } })
+    const firstUpdate = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/notes',
+      headers: bearer(firstToken),
+      payload: { notes: firstState, expectedRevision: 0 },
+    })
+    assert.equal(firstUpdate.statusCode, 200)
+    assert.deepEqual(firstUpdate.json(), {
+      updatedAt: '2026-09-19T00:00:00.000Z',
+      revision: 1,
+    })
+
+    const staleUpdate = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/notes',
+      headers: bearer(secondToken),
+      payload: { notes: secondState, expectedRevision: 0 },
+    })
+    assert.equal(staleUpdate.statusCode, 409)
+    assert.deepEqual(staleUpdate.json(), {
+      error: {
+        code: 'NOTES_CONFLICT',
+        message: 'Cloud notes changed since they were last read. Refresh and try again.',
+      },
+    })
+    assert.deepEqual(await store.getNotes('revision_user'), { notes: firstState, revision: 1 })
+
+    const refreshed = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      headers: bearer(secondToken),
+    })
+    assert.deepEqual(refreshed.json().notes, firstState)
+    assert.equal(refreshed.json().notesRevision, 1)
+
+    const retry = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/notes',
+      headers: bearer(secondToken),
+      payload: { notes: secondState, expectedRevision: 1 },
+    })
+    assert.equal(retry.statusCode, 200)
+    assert.equal(retry.json().revision, 2)
+    assert.deepEqual(await store.getNotes('revision_user'), { notes: secondState, revision: 2 })
+  })
+
+  it('requires a non-negative safe expected note revision', async (context) => {
+    const { app } = await testApp()
+    context.after(() => app.close())
+    const token = (await signup(app, 'revision_validator')).json().token as string
+
+    for (const payload of [
+      { notes: notes() },
+      { notes: notes(), expectedRevision: -1 },
+      { notes: notes(), expectedRevision: 0.5 },
+      { notes: notes(), expectedRevision: '0' },
+    ]) {
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/v1/me/notes',
+        headers: bearer(token),
+        payload,
+      })
+      assert.equal(response.statusCode, 400)
+      assert.equal(response.json().error.code, 'INVALID_REQUEST')
+    }
+  })
+
+  it('strictly validates note structure, content, dates, timestamps, uniqueness, and size', async (context) => {
+    const { app, store } = await testApp()
+    context.after(() => app.close())
+    const created = await signup(app, 'validator')
+    const token = created.json().token as string
+    const duplicate = paperNote()
+    const invalidStates: unknown[] = [
+      null,
+      { ...notes(), extra: true },
+      { ...notes(), version: 2 },
+      { ...notes(), dailyNotes: [] },
+      { ...notes(), dailyNotes: { '2026-02-29': 'Not a real date' } },
+      { ...notes(), dailyNotes: { '2026-09-18': ' \n\t ' } },
+      {
+        ...notes(),
+        paperNotes: Array.from({ length: MAX_PAPER_NOTES + 1 }, (_, index) => (
+          paperNote({ id: `note-${index}` })
+        )),
+      },
+      { ...notes(), paperNotes: [{ ...paperNote(), extra: true }] },
+      { ...notes(), paperNotes: [paperNote({ id: 'bad id' })] },
+      { ...notes(), paperNotes: [{ ...paperNote(), kind: 'secret' }] },
+      { ...notes(), paperNotes: [paperNote({ title: 'x'.repeat(49) })] },
+      { ...notes(), paperNotes: [paperNote({ body: 'x'.repeat(801) })] },
+      { ...notes(), paperNotes: [paperNote({ title: ' ', body: '\n' })] },
+      { ...notes(), paperNotes: [paperNote({ updatedAt: '2026-09-18' })] },
+      { ...notes(), paperNotes: [duplicate, { ...duplicate }] },
+      { ...notes(), dailyNotes: { '2026-09-18': 'x'.repeat(MAX_NOTES_BYTES) } },
+    ]
+
+    // Signup accepts a maximum-size tracker and notes together. Keep enough
+    // room for credentials and the JSON envelope under Fastify's 800 KiB cap.
+    assert.ok(MAX_TRACKER_BYTES + MAX_NOTES_BYTES + 1024 <= 800 * 1024)
+    for (const invalid of invalidStates) {
+      assert.throws(() => validateNotesState(invalid), (error: unknown) => (
+        error instanceof Error && error.message.length > 0
+      ))
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/v1/me/notes',
+        headers: bearer(token),
+        payload: { notes: invalid, expectedRevision: 0 },
+      })
+      assert.equal(response.statusCode, 400)
+      assert.equal(response.json().error.code, 'INVALID_NOTES')
+    }
+    assert.equal(await store.getNotes('validator'), null)
+
+    const extraRequestField = await app.inject({
+      method: 'PUT',
+      url: '/v1/me/notes',
+      headers: bearer(token),
+      payload: { notes: notes(), expectedRevision: 0, extra: true },
+    })
+    assert.equal(extraRequestField.statusCode, 400)
+    assert.equal(extraRequestField.json().error.code, 'INVALID_REQUEST')
+
+    const invalidSignup = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/signup',
+      payload: {
+        username: 'invalid_notes_signup',
+        password: PASSWORD,
+        tracker: tracker(),
+        notes: { ...notes(), dailyNotes: { '2026-13-01': 'Nope' } },
+      },
+    })
+    assert.equal(invalidSignup.statusCode, 400)
+    assert.equal(invalidSignup.json().error.code, 'INVALID_NOTES')
+    assert.equal(await store.getUser('invalid_notes_signup'), null)
   })
 })
 

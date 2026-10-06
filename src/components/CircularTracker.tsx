@@ -39,6 +39,7 @@ interface CircularTrackerProps {
   today: Date
   dailyVisits: ReadonlySet<string>
   dailyNotes: Readonly<Record<string, string>>
+  notesStorageLabel: string
   notesEnabled: boolean
   onToggle: (day: number, habit: MonthHabit, feedback: CursorFeedback) => boolean
   onDailyNoteChange: (date: string, text: string) => void
@@ -127,12 +128,14 @@ function DateNote({
   selected,
   month,
   value,
+  storageLabel,
   onChange,
   onClose,
 }: {
   selected: SelectedDay
   month: Month
   value: string
+  storageLabel: string
   onChange: (text: string) => void
   onClose: () => void
 }) {
@@ -210,7 +213,7 @@ function DateNote({
             placeholder="A few lines about this day…"
             spellCheck="true"
           />
-          <footer>SAVED ON THIS DEVICE</footer>
+          <footer>{storageLabel}</footer>
         </aside>
       </div>
     </div>,
@@ -403,6 +406,7 @@ export function CircularTracker({
   today,
   dailyVisits,
   dailyNotes,
+  notesStorageLabel,
   notesEnabled,
   onToggle,
   onDailyNoteChange,
@@ -722,6 +726,7 @@ export function CircularTracker({
           selected={selectedDayForMonth}
           month={month}
           value={dailyNotes[dateKey(month, selectedDayForMonth.day)] ?? ''}
+          storageLabel={notesStorageLabel}
           onChange={(text) => onDailyNoteChange(dateKey(month, selectedDayForMonth.day), text)}
           onClose={() => closeDateNote(true)}
         />

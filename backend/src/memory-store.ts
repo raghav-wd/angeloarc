@@ -1,6 +1,13 @@
-import { SessionCollisionError, UsernameTakenError } from './errors.js'
+import { NotesConflictError, SessionCollisionError, UsernameTakenError } from './errors.js'
 import type { DataStore } from './store.js'
-import type { ProfileSummaryRecord, SessionRecord, TrackerState, UserRecord } from './types.js'
+import type {
+  NotesRecord,
+  NotesState,
+  ProfileSummaryRecord,
+  SessionRecord,
+  TrackerState,
+  UserRecord,
+} from './types.js'
 import { trackerSearchSummary } from './tracker.js'
 
 function clone<T>(value: T): T {
@@ -9,20 +16,41 @@ function clone<T>(value: T): T {
 
 export class MemoryStore implements DataStore {
   readonly #users = new Map<string, UserRecord>()
+  readonly #notes = new Map<string, NotesRecord>()
   readonly #sessions = new Map<string, SessionRecord>()
   readonly #following = new Map<string, Map<string, string>>()
 
-  async createUser(user: UserRecord): Promise<void> {
+  async createUser(user: UserRecord, notes?: NotesState): Promise<void> {
     if (this.#users.has(user.username)) throw new UsernameTakenError()
     this.#users.set(user.username, clone({
       ...user,
       searchSummary: trackerSearchSummary(user.tracker),
     }))
+    if (notes) this.#notes.set(user.username, { notes: clone(notes), revision: 1 })
   }
 
   async getUser(username: string): Promise<UserRecord | null> {
     const user = this.#users.get(username)
     return user ? clone(user) : null
+  }
+
+  async getNotes(username: string): Promise<NotesRecord | null> {
+    const notes = this.#notes.get(username)
+    return notes ? clone(notes) : null
+  }
+
+  async updateNotes(
+    username: string,
+    notes: NotesState,
+    expectedRevision: number,
+    _updatedAt: string,
+  ): Promise<number> {
+    if (!this.#users.has(username)) throw new Error('User does not exist.')
+    const currentRevision = this.#notes.get(username)?.revision ?? 0
+    if (currentRevision !== expectedRevision) throw new NotesConflictError()
+    const revision = currentRevision + 1
+    this.#notes.set(username, { notes: clone(notes), revision })
+    return revision
   }
 
   async updateTracker(username: string, tracker: TrackerState, updatedAt: string): Promise<void> {

@@ -1,4 +1,6 @@
 import type { TrackerState } from './tracker';
+import type { DailyNotes } from './dailyNotes';
+import type { PaperNotes } from './paperNotes';
 
 const configuredBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim();
 
@@ -34,10 +36,17 @@ export interface Account {
   createdAt: string;
 }
 
+export interface NotesState {
+  version: 1;
+  dailyNotes: DailyNotes;
+  paperNotes: PaperNotes;
+}
+
 export interface SignupInput {
   username: string;
   password: string;
   tracker: TrackerState;
+  notes?: NotesState;
 }
 
 export interface LoginInput {
@@ -49,11 +58,15 @@ export interface AuthResponse {
   token: string;
   account: Account;
   tracker: TrackerState;
+  notes: NotesState | null;
+  notesRevision: number;
 }
 
 export interface MeResponse {
   account: Account;
   tracker: TrackerState;
+  notes: NotesState | null;
+  notesRevision: number;
 }
 
 export interface LogoutResponse {
@@ -62,6 +75,11 @@ export interface LogoutResponse {
 
 export interface TrackerUpdateResponse {
   updatedAt: string;
+}
+
+export interface NotesUpdateResponse {
+  updatedAt: string;
+  revision: number;
 }
 
 export interface ProfileUpdateResponse {
@@ -131,6 +149,7 @@ interface RequestOptions {
   token?: string;
   body?: unknown;
   signal?: AbortSignal;
+  keepalive?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -182,6 +201,7 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal,
+      keepalive: options.keepalive,
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
@@ -247,7 +267,12 @@ export function isValidPassword(password: string): boolean {
 export function signup(input: SignupInput, signal?: AbortSignal): Promise<AuthResponse> {
   return requestJson<AuthResponse>('/v1/auth/signup', {
     method: 'POST',
-    body: { username: input.username, password: input.password, tracker: input.tracker },
+    body: {
+      username: input.username,
+      password: input.password,
+      tracker: input.tracker,
+      ...(input.notes === undefined ? {} : { notes: input.notes }),
+    },
     signal,
   });
 }
@@ -278,6 +303,22 @@ export function updateTracker(
     token,
     body: { tracker },
     signal,
+  });
+}
+
+export function updateNotes(
+  token: string,
+  notes: NotesState,
+  expectedRevision: number,
+  signal?: AbortSignal,
+  keepalive = false,
+): Promise<NotesUpdateResponse> {
+  return requestJson<NotesUpdateResponse>('/v1/me/notes', {
+    method: 'PUT',
+    token,
+    body: { notes, expectedRevision },
+    signal,
+    keepalive,
   });
 }
 

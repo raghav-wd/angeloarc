@@ -14,7 +14,7 @@ import {
   updateTracker,
   unfollowProfile,
 } from '../lib/api'
-import type { Account, AuthResponse } from '../lib/api'
+import type { Account, AuthResponse, NotesState } from '../lib/api'
 import {
   clearTrackerProgress,
   createInitialState,
@@ -96,6 +96,9 @@ export function useTrackerState() {
   const guestState = useRef(loaded.state)
   const [storageError, setStorageError] = useState(loaded.error || savedSession.error)
   const [account, setAccount] = useState<Account | null>(null)
+  const [sessionToken, setSessionToken] = useState<string | null>(null)
+  const [accountNotes, setAccountNotes] = useState<NotesState | null | undefined>(undefined)
+  const [accountNotesRevision, setAccountNotesRevision] = useState<number | undefined>(undefined)
   const accountRef = useRef<Account | null>(null)
   const tokenRef = useRef<string | null>(null)
   const [authReady, setAuthReady] = useState(!savedSession.token)
@@ -174,7 +177,10 @@ export function useTrackerState() {
     }, delay)
   }, [flushRemote])
 
-  const adoptAuthenticatedState = useCallback((response: Pick<AuthResponse, 'account' | 'tracker'>, token: string) => {
+  const adoptAuthenticatedState = useCallback((
+    response: Pick<AuthResponse, 'account' | 'tracker' | 'notes' | 'notesRevision'>,
+    token: string,
+  ) => {
     const next = validateRemoteTracker(response.tracker)
     clearTimeout(saveTimer.current)
     pendingRemoteState.current = null
@@ -183,6 +189,17 @@ export function useTrackerState() {
     currentState.current = next
     setCurrentState(next)
     setAccount(response.account)
+    setSessionToken(token)
+    // During a rolling deploy, an older API may omit this new field. Treat it
+    // like a legacy account with no cloud-notes document instead of leaving
+    // the app stuck in its restoring screen.
+    const notes = response.notes ?? null
+    const receivedRevision = response.notesRevision
+    const notesRevision = Number.isSafeInteger(receivedRevision) && receivedRevision >= 0
+      ? receivedRevision
+      : notes === null ? 0 : 1
+    setAccountNotes(notes)
+    setAccountNotesRevision(notesRevision)
     setSyncStatus('synced')
     setSyncError('')
     persistLocal(accountCacheKey(response.account.username), next)
@@ -255,14 +272,14 @@ export function useTrackerState() {
     setSyncStatus('local')
   }, [persistLocal, scheduleRemoteSave])
 
-  const signup = useCallback(async (username: string, password: string) => {
+  const signup = useCallback(async (username: string, password: string, notes?: NotesState) => {
     setAuthBusy(true)
     setAuthError('')
     try {
       const tracker = guestState.current.isDemo
         ? clearTrackerProgress(guestState.current, new Date())
         : guestState.current
-      const response = await signupRequest({ username, password, tracker })
+      const response = await signupRequest({ username, password, tracker, notes })
       if (!response.token) throw new Error('The server did not return a session token.')
       adoptAuthenticatedState(response, response.token)
     } catch (error) {
@@ -307,6 +324,9 @@ export function useTrackerState() {
       accountRef.current = null
       pendingRemoteState.current = null
       setAccount(null)
+      setSessionToken(null)
+      setAccountNotes(undefined)
+      setAccountNotesRevision(undefined)
       currentState.current = guestState.current
       setCurrentState(guestState.current)
       setSyncStatus('local')
@@ -380,6 +400,9 @@ export function useTrackerState() {
     setState,
     storageError,
     account,
+    sessionToken,
+    accountNotes,
+    accountNotesRevision,
     authReady,
     authBusy,
     authError,

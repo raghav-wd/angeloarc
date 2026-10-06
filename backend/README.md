@@ -46,11 +46,12 @@ The production service uses ADC. Do not package or set a service-account JSON ke
 Authenticated routes use `Authorization: Bearer <token>`. Tokens are 32 random bytes encoded with base64url, last 30 days, and are returned only by signup/login. Only their SHA-256 hashes are stored. Passwords are hashed with `scrypt` and a fresh per-user salt.
 
 - `GET /health` (`/healthz` is retained as a compatibility alias)
-- `POST /v1/auth/signup` — `{username,password,tracker}`
+- `POST /v1/auth/signup` — `{username,password,tracker,notes?}`
 - `POST /v1/auth/login` — `{username,password}`
 - `GET /v1/auth/me`
 - `POST /v1/auth/logout`
 - `PUT /v1/me/tracker` — `{tracker}`
+- `PUT /v1/me/notes` — `{notes,expectedRevision}`
 - `PATCH /v1/me/profile` — `{isPublic}`
 - `GET /v1/me/social` — follower and following totals
 - `GET /v1/me/following` — public profile summaries for followed accounts
@@ -61,7 +62,9 @@ Authenticated routes use `Authorization: Bearer <token>`. Tokens are 32 random b
 
 Errors have the stable shape `{ "error": { "code": "...", "message": "..." } }`. Login always uses the same `INVALID_CREDENTIALS` response for unknown users, malformed usernames, and wrong passwords.
 
-Usernames are normalized to lowercase and must contain 3–24 ASCII letters, numbers, or underscores. Reserved route/system names cannot be registered. Passwords contain 8–128 Unicode code points. Profiles are public on signup and may subsequently be made private. A public profile response includes the canonical tracker needed to render its read-only circular layout, but strips reminders; passwords, sessions, and browser-local daily notes are never exposed.
+Usernames are normalized to lowercase and must contain 3–24 ASCII letters, numbers, or underscores. Reserved route/system names cannot be registered. Passwords contain 8–128 Unicode code points. Profiles are public on signup and may subsequently be made private. Signup, login, and `GET /v1/auth/me` return the private account's `notes` and `notesRevision`; notes are `null` with revision `0` until an older account initializes cloud storage, while notes supplied at signup start at revision `1`. A public profile response includes the canonical tracker needed to render its read-only circular layout, but strips reminders; passwords, sessions, daily notes, and notes to self are never exposed.
+
+Cloud notes use the exact version-1 shape `{version,dailyNotes,paperNotes}`. Daily-note keys must be real `YYYY-MM-DD` dates and blank entries are omitted. Up to 12 notes to self are accepted, with unique safe IDs, one of the supported kinds, titles up to 48 characters, bodies up to 800 characters, and canonical ISO timestamps. The complete canonical notes payload is capped at 88 KiB so it can be seeded alongside a maximum-size tracker without exceeding the signup request limit. Note updates use optimistic concurrency: clients send the last `notesRevision` they read as `expectedRevision`, and a successful update returns the incremented `revision`. A stale update receives `409 NOTES_CONFLICT` and must refresh before retrying. Existing Firestore note documents without a revision are treated as revision `1` and gain an explicit revision on their next successful update.
 
 Tracker responses use the version-2 model:
 
@@ -91,7 +94,7 @@ V2 histories may contain at most 1,200 monthly plan snapshots and 45,000 complet
 
 ## Firestore setup
 
-The service stores user documents under `users/{normalizedUsername}`, session documents under `sessions/{sha256Token}`, and follow edges under `users/{followerUsername}/following/{followedUsername}`. Each user also has a small top-level `searchSummary` containing only the title and latest plan's habit count. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material, search summary, and the unqueried tracker map from this directory. The tracker exemption is important: a long but valid completion history must not hit Firestore's per-document index-entry limit.
+The service stores user documents under `users/{normalizedUsername}`, private note documents under `userNotes/{normalizedUsername}`, session documents under `sessions/{sha256Token}`, and follow edges under `users/{followerUsername}/following/{followedUsername}`. Each user also has a small top-level `searchSummary` containing only the title and latest plan's habit count. Supplying notes at signup creates the user and private note document in one atomic batch. Browser access is not used. Deploy the included deny-all rules, public-search composite index, and the single-field index exemptions for password material, search summary, tracker data, and private note data from this directory. The large-map exemptions prevent unqueried content from hitting Firestore's per-document index-entry limit.
 
 Public search uses a Firestore field mask and reads only username, `searchSummary`, and the update timestamp. A narrow legacy fallback reads only V1 title/habits. It never loads password fields, V2 habit-plan history, or the potentially large completion map. The checked-in indexes also include the collection-group ascending index on `following.followedUsername` required by follower counts; profile and follow endpoints return server errors if that index is omitted from a Firestore deployment.
 

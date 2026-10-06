@@ -23,3 +23,10 @@ export class SessionCollisionError extends Error {
     this.name = 'SessionCollisionError'
   }
 }
+
+export class NotesConflictError extends Error {
+  constructor() {
+    super('Cloud notes changed since they were last read.')
+    this.name = 'NotesConflictError'
+  }
+}

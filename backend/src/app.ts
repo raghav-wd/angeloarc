@@ -4,8 +4,9 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify from 'fastify'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { authenticate, hashPassword, issueSession, validatePassword, verifyPassword } from './auth.js'
-import { ApiError, UsernameTakenError } from './errors.js'
+import { ApiError, NotesConflictError, UsernameTakenError } from './errors.js'
 import { MemoryStore } from './memory-store.js'
+import { validateNotesState } from './notes.js'
 import type { DataStore } from './store.js'
 import {
   clearDemoProgress,
@@ -17,7 +18,7 @@ import {
   validateTracker,
 } from './tracker.js'
 import { publicAccount } from './types.js'
-import type { UserRecord } from './types.js'
+import type { NotesRecord, UserRecord } from './types.js'
 import { normalizeSearchQuery, normalizeUsername } from './username.js'
 
 const BODY_LIMIT_BYTES = 800 * 1024
@@ -92,12 +93,25 @@ function publicTracker(user: UserRecord) {
   }
 }
 
-function authPayload(user: UserRecord, token?: string) {
+function authPayload(user: UserRecord, notesRecord: NotesRecord | null, token?: string) {
   return {
     ...(token ? { token } : {}),
     account: publicAccount(user),
     tracker: user.tracker,
+    notes: notesRecord?.notes ?? null,
+    notesRevision: notesRecord?.revision ?? 0,
   }
+}
+
+function validateExpectedRevision(value: unknown): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new ApiError(
+      400,
+      'INVALID_REQUEST',
+      'expectedRevision must be a non-negative safe integer.',
+    )
+  }
+  return value as number
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -121,6 +135,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             paths: [
               'req.headers.authorization',
               'req.body.password',
+              'req.body.notes',
               'password',
               'passwordHash',
               'passwordSalt',
@@ -167,11 +182,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     '/v1/auth/signup',
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const body = requireBody(request.body, ['username', 'password', 'tracker'])
+      const hasNotes = isRecord(request.body) && Object.hasOwn(request.body, 'notes')
+      const body = requireBody(
+        request.body,
+        hasNotes ? ['username', 'password', 'tracker', 'notes'] : ['username', 'password', 'tracker'],
+      )
       const username = normalizeUsername(body.username)
       const password = validatePassword(body.password)
       const requestTime = now()
       const tracker = clearDemoProgress(validateTracker(body.tracker), requestTime)
+      const notes = hasNotes ? validateNotesState(body.notes) : null
       const passwordCredentials = await hashPassword(password)
       const timestamp = requestTime.toISOString()
       const user: UserRecord = {
@@ -184,7 +204,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         searchSummary: trackerSearchSummary(tracker),
       }
       try {
-        await store.createUser(user)
+        if (notes) await store.createUser(user, notes)
+        else await store.createUser(user)
       } catch (error) {
         if (error instanceof UsernameTakenError) {
           throw new ApiError(409, 'USERNAME_TAKEN', 'That username is already registered.')
@@ -193,7 +214,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       }
       const { token } = await issueSession(store, username, now())
       reply.code(201)
-      return authPayload(user, token)
+      return authPayload(user, notes ? { notes, revision: 1 } : null, token)
     },
   )
 
@@ -207,14 +228,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       if (!candidate.shapeValid || !user || !passwordMatches) {
         throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid username or password.')
       }
+      const notes = await store.getNotes(user.username)
       const { token } = await issueSession(store, user.username, now())
-      return authPayload(user, token)
+      return authPayload(user, notes, token)
     },
   )
 
   app.get('/v1/auth/me', async (request) => {
     const { user } = await authenticatedUser(store, request, now)
-    return authPayload(user)
+    const notes = await store.getNotes(user.username)
+    return authPayload(user, notes)
   })
 
   app.post('/v1/auth/logout', async (request) => {
@@ -230,6 +253,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const updatedAt = now().toISOString()
     await store.updateTracker(user.username, tracker, updatedAt)
     return { updatedAt }
+  })
+
+  app.put('/v1/me/notes', async (request) => {
+    const { user } = await authenticatedUser(store, request, now)
+    const body = requireBody(request.body, ['notes', 'expectedRevision'])
+    const notes = validateNotesState(body.notes)
+    const expectedRevision = validateExpectedRevision(body.expectedRevision)
+    const updatedAt = now().toISOString()
+    try {
+      const revision = await store.updateNotes(user.username, notes, expectedRevision, updatedAt)
+      return { updatedAt, revision }
+    } catch (error) {
+      if (error instanceof NotesConflictError) {
+        throw new ApiError(
+          409,
+          'NOTES_CONFLICT',
+          'Cloud notes changed since they were last read. Refresh and try again.',
+        )
+      }
+      throw error
+    }
   })
 
   app.patch('/v1/me/profile', async (request) => {

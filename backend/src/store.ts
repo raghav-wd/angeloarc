@@ -1,8 +1,22 @@
-import type { ProfileSummaryRecord, SessionRecord, TrackerState, UserRecord } from './types.js'
+import type {
+  NotesRecord,
+  NotesState,
+  ProfileSummaryRecord,
+  SessionRecord,
+  TrackerState,
+  UserRecord,
+} from './types.js'
 
 export interface DataStore {
-  createUser(user: UserRecord): Promise<void>
+  createUser(user: UserRecord, notes?: NotesState): Promise<void>
   getUser(username: string): Promise<UserRecord | null>
+  getNotes(username: string): Promise<NotesRecord | null>
+  updateNotes(
+    username: string,
+    notes: NotesState,
+    expectedRevision: number,
+    updatedAt: string,
+  ): Promise<number>
   updateTracker(username: string, tracker: TrackerState, updatedAt: string): Promise<void>
   updateVisibility(username: string, isPublic: boolean, updatedAt: string): Promise<UserRecord | null>
   createSession(session: SessionRecord): Promise<void>

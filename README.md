@@ -8,7 +8,7 @@ Registered profiles are public by default. The public view shares the circular r
 
 - `src/` — the static React frontend, ready for GitHub Pages.
 - `backend/` — the Fastify API, ready for a Cloud Run source deployment.
-- Firestore — durable production storage for users, tracker state, and revocable sessions.
+- Firestore — durable production storage for users, tracker state, private notes, and revocable sessions.
 - In-memory storage — the default backend mode for local development and automated tests only.
 
 Cloud Run's local filesystem is not used for application data. The frontend and backend are deliberately separate deployments and communicate through `VITE_API_BASE_URL`.
@@ -123,9 +123,10 @@ The Vite build uses relative asset URLs, so it works at both `OWNER.github.io/RE
 - Usernames are case-insensitively unique, 3–24 characters, and limited to letters, numbers, and underscores.
 - Passwords are hashed with salted `scrypt`. The API stores only a SHA-256 hash of each random session token, and sessions expire after 30 days.
 - The browser holds the opaque bearer token so authentication works reliably across the GitHub Pages and Cloud Run domains. CORS accepts only configured origins.
-- Signup imports the current guest routine but clears the built-in sample completions before publishing it. Login always loads the account's server state; it never overwrites an existing account with unrelated guest data.
-- Guest and account caches use separate browser-storage keys. Logging out restores the guest routine.
+- Signup imports the current guest routine and private notes, but clears the built-in sample completions before publishing the routine. Login always loads the account's server state; it never overwrites an existing account with unrelated guest data.
+- Guest data stays in browser storage. Creating an account transfers the guest notes into its private cloud record and clears that guest note copy; later guest notes remain device-only. Signed-in notes never use an account-scoped browser copy.
 - Tracker and settings changes save locally as they happen and are debounced to the API for signed-in users. A sync failure does not stop the local tracker from working.
+- Signed-in daily notes and notes to self are debounced to the private API and restored on another device. When an older account creates its cloud-notes record for the first time, its account-scoped browser notes are uploaded; stale device copies are then removed.
 - The top-right account control is reserved for sign-in, profile visibility, follower totals, and sign-out. The center-right people control opens a compact drawer that defaults to followed profiles and also searches public usernames.
 - Selecting a public profile replaces the current circle through the same clockwise out/in animation. Public circles are read-only; use **My practice** to animate back to the signed-in or guest routine.
 - There is intentionally no email collection or password-recovery flow in this small username-only system. Losing the password means the account cannot currently be recovered.
@@ -155,7 +156,7 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 - From the keyboard, Delete throws the focused note into the bin, Alt with an arrow key swaps it with its neighbor, and Escape puts a held ball back. On touch screens, picking up, swapping, and throwing come with short vibrations where the browser supports them.
 - Leaving the page rolls every ball off screen before the homepage, settings, account, or people view takes over. **My practice**, the paper-ball control, the ANGELO mark, and Escape all lead back to the homepage.
 - Up to 12 notes are kept, with titles up to 48 characters and text up to 800 characters. A first visit starts with three example notes.
-- Like daily notes, notes to self are saved only on this device and are kept separately for guests and each account. Creating an account copies the guest notes into it, and they are never shared on a public profile.
+- For guests, daily notes and notes to self stay on this device. Creating an account moves those guest notes into the account's private cloud record and clears the guest copy after signup succeeds. Signed-in notes follow the account across devices and are never shared on a public profile.
 
 ## Welcome guide
 

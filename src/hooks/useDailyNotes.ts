@@ -158,8 +158,8 @@ export function useDailyNotes(username?: string | null): {
 }
 
 /**
- * Copies guest notes into a newly created account scope. Existing account
- * notes take precedence, and guest notes remain available after sign-out.
+ * Legacy helper for copying guest notes into an account-scoped device cache.
+ * Existing account notes take precedence.
  */
 export function mergeGuestNotesIntoAccount(username: string): DailyNotes {
   if (!normalizeDailyNotesUsername(username)) {
@@ -173,4 +173,9 @@ export function mergeGuestNotesIntoAccount(username: string): DailyNotes {
   )
   accountStore.replaceDailyNotes(merged)
   return merged
+}
+
+/** Removes a successfully transferred guest snapshot from this device. */
+export function clearGuestDailyNotes(): void {
+  storeFor(null).replaceDailyNotes(emptyDailyNotes())
 }

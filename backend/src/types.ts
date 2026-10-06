@@ -32,6 +32,30 @@ export interface SearchSummary {
   habitCount: number
 }
 
+export const PAPER_NOTE_KINDS = ['principle', 'goal', 'quote', 'note'] as const
+
+export type PaperNoteKind = (typeof PAPER_NOTE_KINDS)[number]
+
+export interface PaperNote {
+  id: string
+  kind: PaperNoteKind
+  title: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NotesState {
+  version: 1
+  dailyNotes: Record<string, string>
+  paperNotes: PaperNote[]
+}
+
+export interface NotesRecord {
+  notes: NotesState
+  revision: number
+}
+
 export interface UserRecord {
   username: string
   passwordHash: string

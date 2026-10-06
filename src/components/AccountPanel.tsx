@@ -149,7 +149,7 @@ export function AccountPanel({
             <h3 id="auth-heading">{activeView === 'signup' ? 'Choose a name that is yours.' : 'Pick up where you left off.'}</h3>
             <p className="auth-intro">
               {activeView === 'signup'
-                ? 'Your current routine comes with you. Sample check-ins are cleared, and your profile starts public.'
+                ? 'Your current routine and guest notes come with you. Sample check-ins are cleared, and your profile starts public.'
                 : 'Signing in loads your account routine. Your guest routine stays safely on this device.'}
             </p>
             <form className="auth-form" onSubmit={(event) => void submitAuth(event)}>

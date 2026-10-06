@@ -1,8 +1,11 @@
 import { Firestore, Timestamp } from '@google-cloud/firestore'
-import { SessionCollisionError, UsernameTakenError } from './errors.js'
+import { NotesConflictError, SessionCollisionError, UsernameTakenError } from './errors.js'
+import { validateNotesState } from './notes.js'
 import type { DataStore } from './store.js'
 import { trackerSearchSummary, validateTracker } from './tracker.js'
 import type {
+  NotesRecord,
+  NotesState,
   ProfileSummaryRecord,
   SearchSummary,
   SessionRecord,
@@ -92,9 +95,21 @@ function firestoreCode(error: unknown): number | string | undefined {
   return (error as { code?: number | string }).code
 }
 
+function notesRecordFromData(data: Record<string, unknown>): NotesRecord {
+  const revision = data.revision === undefined ? 1 : data.revision
+  if (!Number.isSafeInteger(revision) || (revision as number) < 1) {
+    throw new Error('Firestore notes record contains an invalid revision.')
+  }
+  return {
+    notes: validateNotesState(data.notes),
+    revision: revision as number,
+  }
+}
+
 export class FirestoreStore implements DataStore {
   readonly #firestore: Firestore
   readonly #users
+  readonly #notes
   readonly #sessions
 
   constructor(options: FirestoreStoreOptions = {}) {
@@ -103,17 +118,30 @@ export class FirestoreStore implements DataStore {
     if (options.databaseId) settings.databaseId = options.databaseId
     this.#firestore = new Firestore(settings)
     this.#users = this.#firestore.collection('users')
+    this.#notes = this.#firestore.collection('userNotes')
     this.#sessions = this.#firestore.collection('sessions')
   }
 
-  async createUser(user: UserRecord): Promise<void> {
+  async createUser(user: UserRecord, notes?: NotesState): Promise<void> {
     try {
-      await this.#users.doc(user.username).create({
+      const userData = {
         ...user,
         searchSummary: trackerSearchSummary(user.tracker),
         createdAt: timestamp(user.createdAt),
         updatedAt: timestamp(user.updatedAt),
-      })
+      }
+      if (notes) {
+        const batch = this.#firestore.batch()
+        batch.create(this.#users.doc(user.username), userData)
+        batch.create(this.#notes.doc(user.username), {
+          notes,
+          revision: 1,
+          updatedAt: timestamp(user.updatedAt),
+        })
+        await batch.commit()
+      } else {
+        await this.#users.doc(user.username).create(userData)
+      }
     } catch (error) {
       if (firestoreCode(error) === 6 || firestoreCode(error) === '6' || firestoreCode(error) === 'ALREADY_EXISTS') {
         throw new UsernameTakenError()
@@ -126,6 +154,35 @@ export class FirestoreStore implements DataStore {
     const snapshot = await this.#users.doc(username).get()
     if (!snapshot.exists) return null
     return userFromData(snapshot.data() as Record<string, unknown>)
+  }
+
+  async getNotes(username: string): Promise<NotesRecord | null> {
+    const snapshot = await this.#notes.doc(username).get()
+    if (!snapshot.exists) return null
+    return notesRecordFromData(snapshot.data() as Record<string, unknown>)
+  }
+
+  async updateNotes(
+    username: string,
+    notes: NotesState,
+    expectedRevision: number,
+    updatedAt: string,
+  ): Promise<number> {
+    const reference = this.#notes.doc(username)
+    return this.#firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference)
+      const currentRevision = snapshot.exists
+        ? notesRecordFromData(snapshot.data() as Record<string, unknown>).revision
+        : 0
+      if (currentRevision !== expectedRevision) throw new NotesConflictError()
+      const revision = currentRevision + 1
+      transaction.set(reference, {
+        notes,
+        revision,
+        updatedAt: timestamp(updatedAt),
+      })
+      return revision
+    })
   }
 
   async updateTracker(username: string, tracker: TrackerState, updatedAt: string): Promise<void> {

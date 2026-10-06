@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import {
   createStarterPaperNotes,
+  emptyPaperNotes,
   mergePaperNotes,
   normalizePaperNotesUsername,
   paperNotesStorageKey,
@@ -202,8 +203,8 @@ export function usePaperNotes(username?: string | null): {
 }
 
 /**
- * Copies guest notes into a newly created account scope. Existing account
- * notes take precedence, and guest notes remain available after sign-out.
+ * Legacy helper for copying guest notes into an account-scoped device cache.
+ * Existing account notes take precedence.
  */
 export function mergeGuestPaperNotesIntoAccount(username: string): PaperNotes {
   if (!normalizePaperNotesUsername(username)) {
@@ -219,4 +220,9 @@ export function mergeGuestPaperNotesIntoAccount(username: string): PaperNotes {
     : mergePaperNotes(guestNotes, accountStore.getSnapshot().paperNotes)
   accountStore.replace(merged)
   return merged
+}
+
+/** Removes a successfully transferred guest snapshot from this device. */
+export function clearGuestPaperNotes(): void {
+  storeFor(null).replace(emptyPaperNotes())
 }

@@ -19,14 +19,14 @@ import type { PaperNotesPhase } from './components/PaperNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SocialPanel } from './components/SocialPanel'
 import { TodayTasks } from './components/TodayTasks'
-import { mergeGuestNotesIntoAccount, useDailyNotes } from './hooks/useDailyNotes'
 import { useDailyVisits } from './hooks/useDailyVisits'
-import { mergeGuestPaperNotesIntoAccount, usePaperNotes } from './hooks/usePaperNotes'
+import { useNotesState } from './hooks/useNotesState'
 import { useTrackerState } from './hooks/useTrackerState'
 import { taskDateFor, taskDateKey, TODAY_TASKS_ID } from './lib/dayTasks'
 import type { TaskDate } from './lib/dayTasks'
 import { FLASH_REMINDER_MESSAGE, pickReminder } from './lib/flashReminder'
 import { onboardingStorage, recordOnboardingProgress, shouldShowOnboarding } from './lib/onboarding'
+import { createNotesState } from './lib/notesState'
 import { PANEL_EXIT_DURATION, SWEEP_IN_DURATION, SWEEP_OUT_DURATION, SWEEP_STAGGER, TEXT_SWEEP } from './lib/radialSweep'
 import { clearTrackerProgress, dateKey, daysInMonth, formatFullDate, getHabitsForMonth, isFutureDate, isHabitAvailableOnDate, monthKey, toggleCompletion } from './lib/tracker'
 import type { Month, MonthHabit } from './lib/tracker'
@@ -76,6 +76,9 @@ function App() {
     setState,
     storageError,
     account,
+    sessionToken,
+    accountNotes,
+    accountNotesRevision,
     authReady,
     authBusy,
     authError,
@@ -93,15 +96,26 @@ function App() {
   } = useTrackerState()
   const [today, setToday] = useState(() => new Date())
   const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
-  const { dailyNotes, setDailyNote, notesStorageError } = useDailyNotes(account?.username)
   const {
+    dailyNotes,
+    setDailyNote,
     paperNotes,
     savePaperNote,
     deletePaperNote,
     swapPaperNotes,
     restorePaperNote,
+    notesStorageError,
     paperNotesStorageError,
-  } = usePaperNotes(account?.username)
+    syncStatus: notesSyncStatus,
+    ready: notesReady,
+    flushNotes,
+    clearGuestNotes,
+  } = useNotesState({
+    username: account?.username,
+    token: sessionToken,
+    initialNotes: accountNotes,
+    initialRevision: accountNotesRevision,
+  })
   const [month, setMonth] = useState<Month>(() => ({ year: today.getFullYear(), month: today.getMonth() }))
   const [panel, setPanel] = useState<PanelKind | null>(null)
   const [phase, setPhase] = useState<PanelPhase>('closed')
@@ -167,6 +181,17 @@ function App() {
           ? 'SAVED HERE · SYNC PAUSED'
           : 'SYNCED TO PROFILE'
     : storageError
+      ? 'IN THIS TAB ONLY'
+      : 'SAVED ON THIS DEVICE'
+  const notesPersistenceLabel = account
+    ? notesSyncStatus === 'restoring'
+      ? 'LOADING FROM CLOUD'
+      : notesSyncStatus === 'syncing'
+        ? 'SYNCING TO CLOUD'
+        : notesSyncStatus === 'error' || notesStorageError || paperNotesStorageError
+          ? 'CLOUD SYNC PAUSED'
+          : 'SAVED TO CLOUD'
+    : notesStorageError || paperNotesStorageError
       ? 'IN THIS TAB ONLY'
       : 'SAVED ON THIS DEVICE'
 
@@ -435,9 +460,8 @@ function App() {
   }
 
   async function signupWithNotes(username: string, password: string) {
-    await signup(username, password)
-    mergeGuestNotesIntoAccount(username)
-    mergeGuestPaperNotesIntoAccount(username)
+    await signup(username, password, createNotesState(dailyNotes, paperNotes))
+    clearGuestNotes()
   }
 
   function toggle(day: number, habit: MonthHabit, feedback: CursorFeedback): boolean {
@@ -493,7 +517,7 @@ function App() {
     setAnnouncement(`Showing your tasks for ${formatFullDate(month, day)}.`)
   }
 
-  if (!authReady) return <AccountLoadingScreen />
+  if (!authReady || !notesReady) return <AccountLoadingScreen />
 
   const dayNoteContent = (
     <>
@@ -645,6 +669,7 @@ function App() {
                   today={today}
                   dailyVisits={viewedProfile ? EMPTY_DAILY_VISITS : dailyVisits}
                   dailyNotes={viewedProfile ? EMPTY_DAILY_NOTES : dailyNotes}
+                  notesStorageLabel={notesPersistenceLabel}
                   notesEnabled={!viewedProfile && phase === 'closed' && switchPhase === 'idle' && !flashActive && !notesActive && !tasksShown}
                   onToggle={toggle}
                   onDailyNoteChange={setDailyNote}
@@ -745,6 +770,10 @@ function App() {
                 onLogin={login}
                 onSignup={signupWithNotes}
                 onLogout={async () => {
+                  const notesSaved = await flushNotes()
+                  if (!notesSaved && !window.confirm(
+                    'Your latest notes have not reached the cloud. Sign out anyway and discard those unsaved changes?',
+                  )) return
                   await logout()
                   setViewedProfile((current) => current ? { ...current, isFollowing: false } : current)
                 }}
@@ -816,7 +845,7 @@ function App() {
             dissolveTargets={() => notesFromPanel
               ? []
               : [workspaceLayer.current, footerLayer.current].filter((layer): layer is HTMLDivElement => Boolean(layer))}
-            storageLabel={paperNotesStorageError ? 'IN THIS TAB ONLY' : 'SAVED ON THIS DEVICE'}
+            storageLabel={notesPersistenceLabel}
             onArrived={() => setNotesPhase('open')}
             onLeft={finishNotesExit}
             onExit={() => leaveNotes('home')}
