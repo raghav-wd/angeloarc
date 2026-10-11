@@ -1,0 +1,1629 @@
+/*
+  Strawberry — a blush-pink take on ANGELO.
+
+  Kept promises turn into ripe berry with a few seeds; today's date sits on a
+  little strawberry; the grid is drawn in pink with a berry pinned here and
+  there; and a few bits of stationery, with Anri at work, sit around the page.
+  Everything is scoped to <html data-theme="strawberry">, so the default
+  monochrome look is untouched.
+*/
+
+:root[data-theme='strawberry'] {
+  --sb-paper: #fff3f5;
+  --sb-cream: #fffafb;
+  --sb-blush: #ffe7ed;
+  --sb-blush-deep: #fdd9e2;
+  --sb-line: #f4c6d3;
+  --sb-line-strong: #eba9bb;
+  --sb-pink: #f29ab0;
+  --sb-rose: #ea7393;
+  --sb-berry: #e8506f;
+  --sb-berry-deep: #cf3a5a;
+  --sb-ink: #5b2337;
+  --sb-ink-soft: #7c3a52;
+  --sb-mauve: #94546b;
+  --sb-muted: #ad7487;
+  --sb-faint: #c99aa9;
+  --sb-seed: #ffe7a3;
+  --sb-leaf: #7fb069;
+  --sb-leaf-deep: #5c9449;
+  --sb-shadow: #8c2c4a;
+
+  --ink: var(--sb-ink);
+  --muted: var(--sb-muted);
+  --line: var(--sb-line);
+  --paper: var(--sb-paper);
+  color: var(--sb-ink);
+  background: var(--sb-paper);
+}
+
+[data-theme='strawberry'] ::selection {
+  color: white;
+  background: var(--sb-rose);
+}
+
+[data-theme='strawberry'] input::placeholder,
+[data-theme='strawberry'] textarea::placeholder {
+  color: var(--sb-faint);
+}
+
+/* ——— The page: the same grid in pink, with a berry pinned here and there ——— */
+
+[data-theme='strawberry'] .ambient-grid {
+  background-image:
+    url('../assets/strawberry/print.svg'),
+    linear-gradient(#e47b9959 1px, transparent 1px),
+    linear-gradient(90deg, #e47b9959 1px, transparent 1px);
+  background-size: 504px 504px, 42px 42px, 42px 42px;
+}
+
+[data-theme='strawberry'] .page-grain {
+  background:
+    radial-gradient(ellipse at 53% 45%, #fff3f5d9 6%, transparent 49%),
+    linear-gradient(180deg, #fff3f5 0%, transparent 23%, transparent 85%, #fff3f5 100%);
+}
+
+/* ——— Things left on the desk, and Anri hard at work ——— */
+
+.strawberry-desk {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.strawberry-desk > img {
+  position: absolute;
+  height: auto;
+  user-select: none;
+}
+
+.desk-ruler {
+  top: 150px;
+  left: -46px;
+  width: clamp(170px, 15vw, 232px);
+  opacity: 0.55;
+  transform: rotate(-21deg);
+}
+
+.desk-pens {
+  top: 108px;
+  right: clamp(150px, 13.5vw, 214px);
+  width: clamp(90px, 8vw, 124px);
+  opacity: 0.58;
+  transform: rotate(12deg);
+}
+
+.desk-anri {
+  right: clamp(150px, 14vw, 222px);
+  bottom: 116px;
+  width: clamp(80px, 7.2vw, 106px);
+  opacity: 0.9;
+  transform-origin: 50% 100%;
+  animation: desk-anri-write 3.8s ease-in-out infinite;
+}
+
+@keyframes desk-anri-write {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1.5px) rotate(-1.2deg); }
+}
+
+/* The day note is taped to the page. */
+[data-theme='strawberry'] .day-note::before {
+  content: '';
+  position: absolute;
+  top: -21px;
+  left: -18px;
+  width: 62px;
+  height: 20px;
+  background: url('../assets/strawberry/washi.webp') center / contain no-repeat;
+  opacity: 0.8;
+  pointer-events: none;
+  transform: rotate(-11deg);
+  transition: opacity 200ms ease;
+}
+
+[data-theme='strawberry'] .day-note.is-tasks-open::before {
+  opacity: 0;
+}
+
+/* ——— Header and floating controls ——— */
+
+[data-theme='strawberry'] .brand-mark path {
+  stroke: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .brand {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .settings-trigger,
+[data-theme='strawberry'] .social-trigger,
+[data-theme='strawberry'] .flash-trigger {
+  border-color: var(--sb-line);
+  background: #fffafbb3;
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .settings-trigger:hover,
+[data-theme='strawberry'] .social-trigger:hover,
+[data-theme='strawberry'] .flash-trigger:hover {
+  border-color: var(--sb-pink);
+  background: white;
+  color: var(--sb-berry-deep);
+  box-shadow: 0 6px 18px #e8506f1a;
+}
+
+[data-theme='strawberry'] .settings-hint,
+[data-theme='strawberry'] .social-hint,
+[data-theme='strawberry'] .people-trigger-hint,
+[data-theme='strawberry'] .notes-trigger-hint,
+[data-theme='strawberry'] .flash-trigger-hint {
+  border-color: var(--sb-line);
+  background: #fffafbf0;
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .settings-hint {
+  background: transparent;
+}
+
+[data-theme='strawberry'] .people-trigger,
+[data-theme='strawberry'] .notes-trigger {
+  border-color: var(--sb-line);
+  background: #fffafbe0;
+  color: var(--sb-ink-soft);
+  box-shadow: 0 4px 18px #e8506f0f;
+}
+
+[data-theme='strawberry'] .people-trigger:hover,
+[data-theme='strawberry'] .notes-trigger:hover {
+  border-color: var(--sb-pink);
+  background: white;
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .people-trigger:disabled:hover,
+[data-theme='strawberry'] .notes-trigger.is-waiting:hover {
+  border-color: var(--sb-line);
+  background: #fffafbe0;
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .is-people-open .people-trigger,
+[data-theme='strawberry'] .is-notes-open .notes-trigger {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .is-people-open .people-trigger:hover,
+[data-theme='strawberry'] .is-notes-open .notes-trigger:hover {
+  border-color: var(--sb-berry-deep);
+  background: var(--sb-berry-deep);
+  color: white;
+}
+
+[data-theme='strawberry'] .onboarding-trigger {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .onboarding-trigger:hover .onboarding-trigger-face,
+[data-theme='strawberry'] .onboarding-trigger:focus-visible .onboarding-trigger-face {
+  border-color: var(--sb-line);
+  background: white;
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .onboarding-trigger-note {
+  border-color: var(--sb-line);
+  background: var(--sb-cream);
+  color: var(--sb-mauve);
+}
+
+/* ——— Hero: the last word of the title is a ripe, seedy strawberry ——— */
+
+[data-theme='strawberry'] .eyebrow {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .eyebrow > span,
+[data-theme='strawberry'] .day-note-heading > span,
+[data-theme='strawberry'] .today-tasks-eyebrow > i {
+  width: 7px;
+  height: 6px;
+  border-radius: 0;
+  background: url('../assets/strawberry/heart.svg') center / contain no-repeat;
+}
+
+[data-theme='strawberry'] .hero-heading h1 {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .hero-heading h1 em,
+[data-theme='strawberry'] .paper-notes-heading h1 em {
+  position: relative;
+  padding-right: 0.06em;
+  background-image:
+    radial-gradient(1.1px 1.7px at 28% 32%, #fff3c9 55%, #fff3c900 100%),
+    radial-gradient(1.1px 1.7px at 78% 76%, #fff3c9 55%, #fff3c900 100%),
+    radial-gradient(closest-side, #ffd9e3e6, #ffd9e300),
+    radial-gradient(closest-side, #bd2a4ecc, #bd2a4e00),
+    linear-gradient(100deg, #f47a96 0%, #e8506f 45%, #f38aa3 70%, #df4567 100%);
+  background-size: 19px 17px, 19px 17px, 70% 120%, 80% 140%, 240% 100%;
+  background-repeat: repeat, repeat, no-repeat, no-repeat, repeat;
+  background-position: 0 0, 0 0, 0% 20%, 100% 80%, 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: strawberry-goo 8s ease-in-out infinite alternate;
+}
+
+/* Glossy berry syrup, slowly flowing through the pink words. */
+[data-theme='strawberry'] .intention-note p em,
+[data-theme='strawberry'] .settings-header h2 em,
+[data-theme='strawberry'] .empty-tracker h2 em {
+  margin: 0 -0.12em 0 -0.04em;
+  padding: 0 0.12em 0 0.04em;
+  background-image:
+    radial-gradient(closest-side, #ffd9e3e6, #ffd9e300),
+    radial-gradient(closest-side, #b3244896, #b3244800),
+    linear-gradient(100deg, #f06f8e 0%, #d93d5e 45%, #ef8199 70%, #cf3a5a 100%);
+  background-size: 70% 120%, 80% 140%, 240% 100%;
+  background-repeat: no-repeat, no-repeat, repeat;
+  background-position: 0% 20%, 100% 80%, 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: strawberry-goo-plain 8s ease-in-out infinite alternate;
+}
+
+@keyframes strawberry-goo {
+  0% { background-position: 0 0, 0 0, -10% 10%, 110% 90%, 0% 50%; }
+  33% { background-position: 0 0, 0 0, 45% 70%, 55% 20%, 40% 50%; }
+  66% { background-position: 0 0, 0 0, 95% 25%, 5% 75%, 75% 50%; }
+  100% { background-position: 0 0, 0 0, 120% 80%, -20% 15%, 100% 50%; }
+}
+
+@keyframes strawberry-goo-plain {
+  0% { background-position: -10% 10%, 110% 90%, 0% 50%; }
+  33% { background-position: 45% 70%, 55% 20%, 40% 50%; }
+  66% { background-position: 95% 25%, 5% 75%, 75% 50%; }
+  100% { background-position: 120% 80%, -20% 15%, 100% 50%; }
+}
+
+[data-theme='strawberry'] .hero-subtitle {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .return-to-own {
+  border-color: var(--sb-line);
+  background: var(--sb-cream);
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .return-to-own:hover {
+  border-color: var(--sb-pink);
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .viewed-profile-identity small {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .profile-relationship-error {
+  color: var(--sb-berry-deep);
+}
+
+/* ——— The wheel ——— */
+
+[data-theme='strawberry'] .habit-list-heading,
+[data-theme='strawberry'] .habit-list-count {
+  fill: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .habit-index {
+  fill: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .habit-name {
+  fill: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .habit-label.is-active .habit-name {
+  fill: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .habit-tick {
+  stroke: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .day-cell {
+  fill: #fffafbd9;
+  stroke: var(--sb-line);
+}
+
+[data-theme='strawberry'] .day-cell.is-today {
+  fill: var(--sb-blush);
+  stroke: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .day-cell.is-done {
+  fill: var(--berry-fill, var(--sb-berry));
+  stroke: #e2486a;
+}
+
+[data-theme='strawberry'] .day-cell.is-unavailable {
+  stroke: #f1cdd7;
+}
+
+[data-theme='strawberry'] .unavailable-ground {
+  fill: #fff0f3;
+}
+
+[data-theme='strawberry'] .unavailable-zigzag {
+  stroke: #efbccb;
+}
+
+[data-theme='strawberry'] .day-cell:hover {
+  fill: var(--sb-blush-deep);
+  stroke: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .day-cell.is-done:hover {
+  fill: var(--berry-fill-hover, var(--sb-rose));
+  stroke: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .day-cell.is-unavailable:hover {
+  stroke: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .day-cell.is-read-only:hover {
+  stroke: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .day-cell:focus-visible {
+  stroke: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .day-cell.is-done:focus-visible {
+  stroke: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .day-cell.is-unavailable:focus-visible {
+  stroke: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .berry-flesh-core {
+  stop-color: #f6829d;
+}
+
+[data-theme='strawberry'] .berry-flesh-skin {
+  stop-color: #e2486a;
+}
+
+[data-theme='strawberry'] .berry-flesh-core.is-hover {
+  stop-color: #f998ae;
+}
+
+[data-theme='strawberry'] .berry-flesh-skin.is-hover {
+  stop-color: #ec6382;
+}
+
+[data-theme='strawberry'] .berry-seed {
+  fill: var(--sb-seed);
+}
+
+[data-theme='strawberry'] .berry-dimple {
+  fill: #a8223f;
+  opacity: 0.2;
+}
+
+[data-theme='strawberry'] .week-divider {
+  stroke: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .day-label text {
+  fill: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .day-visit-dot {
+  fill: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .day-label.is-today text {
+  font-weight: 600;
+  fill: white;
+}
+
+[data-theme='strawberry'] .day-label:hover .date-label-hit,
+[data-theme='strawberry'] .day-label:focus-visible .date-label-hit,
+[data-theme='strawberry'] .day-label.is-note-open .date-label-hit {
+  fill: #fffafbd9;
+  stroke: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .day-label.is-today:hover .date-label-hit,
+[data-theme='strawberry'] .day-label.is-today:focus-visible .date-label-hit,
+[data-theme='strawberry'] .day-label.is-today.is-note-open .date-label-hit {
+  fill: transparent;
+  stroke: transparent;
+}
+
+[data-theme='strawberry'] .day-label:hover text,
+[data-theme='strawberry'] .day-label:focus-visible text,
+[data-theme='strawberry'] .day-label.is-note-open text,
+[data-theme='strawberry'] .day-label.is-task-day text {
+  fill: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .day-label.is-today:hover text,
+[data-theme='strawberry'] .day-label.is-today:focus-visible text,
+[data-theme='strawberry'] .day-label.is-today.is-note-open text,
+[data-theme='strawberry'] .day-label.is-today.is-task-day text {
+  fill: white;
+}
+
+[data-theme='strawberry'] .task-day-marker circle {
+  stroke: var(--sb-berry);
+  stroke-dasharray: 2.2 2.4;
+  stroke-linecap: round;
+}
+
+[data-theme='strawberry'] .day-label.is-today .today-marker {
+  fill: var(--sb-berry);
+}
+
+/* The score: a blossom on top and a seeded, ripe number. */
+.blossom-petal {
+  fill: #fffdfd;
+  stroke: #f0a2b6;
+  stroke-width: 0.6px;
+}
+
+.blossom-heart {
+  fill: #ffd56a;
+  stroke: #efb546;
+  stroke-width: 0.4px;
+}
+
+.blossom-stamen {
+  fill: #e9a93a;
+}
+
+[data-theme='strawberry'] .score-value {
+  fill: var(--berry-score, var(--sb-berry));
+}
+
+[data-theme='strawberry'] .berry-syrup-light {
+  stop-color: #f7859f;
+}
+
+[data-theme='strawberry'] .berry-syrup-mid {
+  stop-color: #e8506f;
+}
+
+[data-theme='strawberry'] .berry-syrup-deep {
+  stop-color: #d63e60;
+}
+
+[data-theme='strawberry'] .berry-gloss {
+  stop-color: #ffe0e8;
+  stop-opacity: 0.85;
+}
+
+[data-theme='strawberry'] .berry-goo {
+  stop-color: #b9284b;
+  stop-opacity: 0.55;
+}
+
+[data-theme='strawberry'] .berry-gloss.is-clear,
+[data-theme='strawberry'] .berry-goo.is-clear {
+  stop-opacity: 0;
+}
+
+[data-theme='strawberry'] .score-percent {
+  fill: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .score-label {
+  fill: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .score-divider {
+  stroke: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .score-detail {
+  fill: var(--sb-muted);
+}
+
+/* ——— Notes around the wheel ——— */
+
+[data-theme='strawberry'] .small-cross {
+  width: 20px;
+  height: 20px;
+  font-size: 0;
+  background: url('../assets/strawberry/blossom.svg') center / contain no-repeat;
+}
+
+[data-theme='strawberry'] .intention-note p {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .note-caption {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .day-note-heading {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .day-counter {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .day-counter > span {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .day-note-copy {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .day-note-line {
+  background: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .day-note-trigger:hover .day-note-line,
+[data-theme='strawberry'] .day-note-trigger:focus-visible .day-note-line {
+  background-color: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .day-note-hint {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .lock-reminder > span {
+  color: var(--sb-muted);
+}
+
+/* ——— Footer ——— */
+
+[data-theme='strawberry'] .legend {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .legend-done {
+  background:
+    radial-gradient(0.8px 1.2px at 30% 32%, var(--sb-seed) 60%, transparent 100%) 0 0 / 5px 5px,
+    radial-gradient(0.8px 1.2px at 78% 78%, var(--sb-seed) 60%, transparent 100%) 0 0 / 5px 5px,
+    var(--sb-berry);
+}
+
+[data-theme='strawberry'] .legend-undone {
+  border-color: var(--sb-line-strong);
+  background: var(--sb-cream);
+}
+
+[data-theme='strawberry'] .legend-unavailable {
+  border-color: #f1cdd7;
+  background: linear-gradient(135deg, transparent 35%, #efbccb 36% 47%, transparent 48%) 0 0 / 4px 4px, #fff0f3;
+}
+
+[data-theme='strawberry'] .footer-guide > p,
+[data-theme='strawberry'] .footer-signoff > p {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .demo-label,
+[data-theme='strawberry'] .viewing-label,
+[data-theme='strawberry'] .saved-label {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .demo-label:hover,
+[data-theme='strawberry'] .viewing-label:hover {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .month-arrow {
+  border-color: var(--sb-line);
+  background: #fffafbcc;
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .month-arrow:hover {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .month-name {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .month-year,
+[data-theme='strawberry'] .month-trigger > svg {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .month-caption {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .month-caption > button {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .month-popover {
+  border-color: var(--sb-line);
+  background: var(--sb-cream);
+  box-shadow: 0 12px 45px #8c2c4a14, 0 2px 8px #8c2c4a08;
+}
+
+[data-theme='strawberry'] .icon-button:hover {
+  background: var(--sb-blush);
+}
+
+[data-theme='strawberry'] .month-option {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .month-option:hover {
+  background: var(--sb-blush);
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .month-option[aria-pressed='true'] {
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .back-to-today {
+  border-top-color: var(--sb-blush-deep);
+  color: var(--sb-mauve);
+}
+
+/* ——— Day notes: blush ruled paper, pinned with a strawberry pin ——— */
+
+[data-theme='strawberry'] .date-note-connector path {
+  stroke: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .date-note-card {
+  border-color: var(--sb-line-strong);
+  background:
+    linear-gradient(105deg, #ffffffd9 0%, transparent 23%, transparent 72%, #8c2c4a0a 100%),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 23px, #eba9bb59 24px),
+    var(--sb-cream);
+  animation-name: strawberry-note-breeze;
+}
+
+[data-theme='strawberry'] .date-note-card::after {
+  background: linear-gradient(135deg, #8c2c4a0a 0 48%, #f7d3dd 50% 74%, #fffafb 76%);
+  filter: drop-shadow(-1px -1px 1px #8c2c4a26);
+}
+
+[data-theme='strawberry'] .date-note-pin {
+  border-color: #b8304f;
+  background:
+    radial-gradient(circle at 34% 27%, #ffffffd9 0 7%, #ffc2cf 9% 14%, transparent 16%),
+    radial-gradient(circle at 42% 38%, #f47b97 0 34%, #e2486a 58%, #b8304f 100%);
+  box-shadow: 0 2px 2px #8c2c4a33, 0 5px 7px #8c2c4a2e;
+}
+
+[data-theme='strawberry'] .date-note-pin::after {
+  background: linear-gradient(to right, #d7a9b6, #8c5566);
+  box-shadow: 1px 2px 2px #8c2c4a24;
+}
+
+[data-theme='strawberry'] .date-note-header {
+  border-bottom-color: #eba9bb66;
+  background: #fffafbf0;
+}
+
+[data-theme='strawberry'] .date-note-header span {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .date-note-header p {
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .date-note-header button {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .date-note-header button:hover,
+[data-theme='strawberry'] .date-note-header button:focus-visible {
+  background: var(--sb-blush);
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .date-note-card textarea {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .date-note-card footer {
+  background: #fffafbf0;
+  color: var(--sb-muted);
+}
+
+@keyframes strawberry-note-breeze {
+  0%, 100% {
+    box-shadow: 0 2px 3px #7a1f3d1f, 0 14px 23px #7a1f3d24, 0 30px 48px #7a1f3d12;
+    transform: translate3d(0, 0, 0) rotateX(0.4deg) rotateY(-0.8deg) rotateZ(-0.65deg);
+  }
+  22% {
+    box-shadow: -2px 3px 4px #7a1f3d1c, 7px 19px 29px #7a1f3d22, 11px 34px 52px #7a1f3d10;
+    transform: translate3d(0, -1px, 6px) rotateX(-1.8deg) rotateY(2.2deg) rotateZ(0.9deg);
+  }
+  46% {
+    box-shadow: 1px 2px 3px #7a1f3d1f, -4px 16px 25px #7a1f3d23, -7px 31px 46px #7a1f3d10;
+    transform: translate3d(0, 0.5px, 2px) rotateX(1.25deg) rotateY(-1.35deg) rotateZ(-0.35deg);
+  }
+  68% {
+    box-shadow: 2px 4px 5px #7a1f3d1c, -7px 22px 34px #7a1f3d20, -12px 38px 56px #7a1f3d0f;
+    transform: translate3d(0, -1.5px, 9px) rotateX(-2.2deg) rotateY(2.7deg) rotateZ(1.05deg);
+  }
+  86% {
+    box-shadow: -1px 2px 3px #7a1f3d1d, 3px 17px 27px #7a1f3d22, 6px 33px 50px #7a1f3d10;
+    transform: translate3d(0, -0.35px, 4px) rotateX(-0.55deg) rotateY(0.75deg) rotateZ(0.18deg);
+  }
+}
+
+/* ——— Tooltip ——— */
+
+[data-theme='strawberry'] .cell-tooltip {
+  border-color: var(--sb-line);
+  background: #fffafbf5;
+  box-shadow: 0 8px 26px #8c2c4a14;
+}
+
+[data-theme='strawberry'] .tooltip-date,
+[data-theme='strawberry'] .tooltip-action {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .tooltip-date > span {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .tooltip-habit {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .tooltip-habit > svg {
+  color: var(--sb-berry);
+}
+
+/* ——— Empty month ——— */
+
+[data-theme='strawberry'] .empty-tracker > svg {
+  stroke: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .empty-tracker > p {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .empty-tracker > button {
+  border-color: var(--sb-line);
+  background: white;
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .empty-tracker > button:hover {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+/* ——— Settings ——— */
+
+[data-theme='strawberry'] .settings-header p:last-child,
+[data-theme='strawberry'] .social-header p:last-child {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .settings-body,
+[data-theme='strawberry'] .social-body {
+  scrollbar-color: var(--sb-line-strong) transparent;
+}
+
+[data-theme='strawberry'] .settings-section {
+  border-bottom-color: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .settings-month-picker span {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .settings-month-arrow {
+  border-color: var(--sb-line);
+  background: white;
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .settings-month-arrow:hover:not(:disabled) {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .settings-month-note,
+[data-theme='strawberry'] .field-help {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .toggle {
+  background: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .toggle[aria-checked='true'] {
+  background: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .title-input {
+  border-color: var(--sb-line);
+  background: white;
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .habit-limit > span,
+[data-theme='strawberry'] .editor-index {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .habit-editor-row + .habit-editor-row {
+  border-top-color: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .habit-editor-row > input {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .remove-habit {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .remove-habit:hover {
+  background: var(--sb-blush);
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .add-habit-row {
+  border-color: var(--sb-line-strong);
+  background: #fffafb99;
+}
+
+[data-theme='strawberry'] .add-habit-row:focus-within {
+  border-color: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .add-habit {
+  background: var(--sb-blush);
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .add-habit:hover {
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .limit-note,
+[data-theme='strawberry'] .empty-habits-hint,
+[data-theme='strawberry'] .reset-section > p,
+[data-theme='strawberry'] .reset-confirmation > span {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .reset-button {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .reset-button:hover {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .reset-confirmation {
+  border-color: var(--sb-line);
+}
+
+[data-theme='strawberry'] .reset-confirmation button {
+  border-color: var(--sb-line);
+}
+
+[data-theme='strawberry'] .reset-confirmation .confirm-clear {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .reset-section > .reset-staged {
+  background: var(--sb-blush);
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .settings-error {
+  border-left-color: var(--sb-berry);
+  background: var(--sb-blush);
+}
+
+[data-theme='strawberry'] .settings-footer {
+  border-top-color: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .settings-autosave {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .settings-autosave > svg,
+[data-theme='strawberry'] .settings-autosave strong {
+  color: var(--sb-berry-deep);
+}
+
+/* The theme picker itself. */
+[data-theme='strawberry'] .theme-option {
+  border-color: var(--sb-line);
+  background: var(--sb-cream);
+}
+
+[data-theme='strawberry'] .theme-option:hover {
+  border-color: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .theme-option.is-selected {
+  border-color: var(--sb-berry);
+  box-shadow: 0 8px 22px #e8506f1f;
+}
+
+[data-theme='strawberry'] .theme-option-paper {
+  stroke: #e8506f1f;
+}
+
+[data-theme='strawberry'] .theme-option-copy > small {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .theme-option-check {
+  background: var(--sb-berry);
+}
+
+/* ——— People, profiles and account ——— */
+
+[data-theme='strawberry'] .people-drawer {
+  border-color: var(--sb-line);
+  background: #fffafbf2;
+  box-shadow: 0 24px 65px #8c2c4a1f, 0 4px 16px #8c2c4a0d;
+}
+
+[data-theme='strawberry'] .social-tabs {
+  border-bottom-color: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .social-tabs > button {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .social-tabs > button:hover {
+  background: var(--sb-blush);
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .social-tabs > button::after {
+  background: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .social-tabs > button.is-active {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .people-list-label {
+  border-bottom-color: var(--sb-blush-deep);
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .people-list-label strong,
+[data-theme='strawberry'] .people-sign-in {
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .people-sign-in {
+  border-color: var(--sb-line);
+  background: white;
+}
+
+[data-theme='strawberry'] .people-row,
+[data-theme='strawberry'] .people-row:first-child,
+[data-theme='strawberry'] .profile-result,
+[data-theme='strawberry'] .profile-result:first-of-type {
+  border-color: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .people-row:hover,
+[data-theme='strawberry'] .profile-result:hover {
+  background: var(--sb-blush);
+}
+
+[data-theme='strawberry'] .people-row.is-active {
+  background: var(--sb-blush);
+  box-shadow: inset 2px 0 var(--sb-berry);
+}
+
+[data-theme='strawberry'] .follow-button {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .follow-button.is-following {
+  border-color: var(--sb-line);
+  background: white;
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .follow-button:hover:not(:disabled) {
+  border-color: var(--sb-berry-deep);
+  background: var(--sb-berry-deep);
+  color: white;
+}
+
+[data-theme='strawberry'] .people-you-label,
+[data-theme='strawberry'] .social-kicker,
+[data-theme='strawberry'] .profile-result-copy small,
+[data-theme='strawberry'] .profile-result-meta,
+[data-theme='strawberry'] .auth-intro,
+[data-theme='strawberry'] .account-identity > div > span,
+[data-theme='strawberry'] .account-social-stats span,
+[data-theme='strawberry'] .account-setting small,
+[data-theme='strawberry'] .account-guest-note,
+[data-theme='strawberry'] .profile-loading,
+[data-theme='strawberry'] .public-profile-title > div > span,
+[data-theme='strawberry'] .profile-score > span,
+[data-theme='strawberry'] .profile-stats > div:last-child span,
+[data-theme='strawberry'] .auth-switch {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .social-section-heading > span {
+  border-color: var(--sb-line);
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .profile-search,
+[data-theme='strawberry'] .auth-input {
+  border-color: var(--sb-line);
+  background: white;
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .profile-search:focus-within,
+[data-theme='strawberry'] .auth-input:focus-within {
+  border-color: var(--sb-rose);
+  box-shadow: 0 0 0 3px #e8506f14;
+}
+
+[data-theme='strawberry'] .profile-search > input,
+[data-theme='strawberry'] .auth-input > input {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .social-empty,
+[data-theme='strawberry'] .profile-no-habits {
+  border-color: var(--sb-line-strong);
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .social-empty p,
+[data-theme='strawberry'] .auth-form > label > span,
+[data-theme='strawberry'] .profile-stats > div:last-child p {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .profile-avatar {
+  border-color: var(--sb-line);
+  background: var(--sb-blush);
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .social-error {
+  border-color: #f0b3c1;
+  background: #fff5f7;
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .auth-submit {
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .auth-submit:hover:not(:disabled) {
+  background: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .auth-switch > button {
+  border-bottom-color: var(--sb-rose);
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .public-note {
+  border-color: var(--sb-line);
+  background: var(--sb-blush);
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .public-note strong,
+[data-theme='strawberry'] .profile-stats > div:last-child p strong {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .account-identity,
+[data-theme='strawberry'] .account-social-stats,
+[data-theme='strawberry'] .account-social-stats > div + div,
+[data-theme='strawberry'] .account-setting,
+[data-theme='strawberry'] .profile-habits li {
+  border-color: var(--sb-blush-deep);
+}
+
+[data-theme='strawberry'] .account-identity > svg {
+  border-color: var(--sb-line);
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .account-actions > button {
+  border-color: var(--sb-line);
+  background: white;
+}
+
+[data-theme='strawberry'] .account-actions > button:hover:not(:disabled) {
+  border-color: var(--sb-pink);
+  background: var(--sb-blush);
+}
+
+[data-theme='strawberry'] .account-actions > .logout-button,
+[data-theme='strawberry'] .profile-back,
+[data-theme='strawberry'] .profile-month > button {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .profile-back:hover,
+[data-theme='strawberry'] .profile-month > button:hover:not(:disabled) {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .profile-month {
+  border-color: var(--sb-line);
+  background: white;
+}
+
+[data-theme='strawberry'] .profile-stats {
+  border-color: var(--sb-line);
+  background: var(--sb-blush);
+}
+
+[data-theme='strawberry'] .profile-score {
+  border-right-color: var(--sb-line);
+}
+
+[data-theme='strawberry'] .profile-habits li > span {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .success-toast {
+  background: var(--sb-berry);
+  color: white;
+  box-shadow: 0 6px 22px #e8506f33;
+}
+
+[data-theme='strawberry'] .storage-warning {
+  border-color: var(--sb-line-strong);
+  background: white;
+  color: var(--sb-ink);
+}
+
+/* ——— Loading ——— */
+
+[data-theme='strawberry'] .account-loading-mark path {
+  stroke: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .account-loading-label {
+  color: var(--sb-muted);
+}
+
+/* ——— Today's tasks: berry ticks and pink pencil ——— */
+
+[data-theme='strawberry'] .today-tasks-eyebrow,
+[data-theme='strawberry'] .today-tasks-summary {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .today-tasks-month {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .today-task {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .today-task:not([aria-disabled='true']):hover {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .today-task-check path {
+  stroke: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .today-task:not([aria-disabled='true']):hover .today-task-check path {
+  stroke: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .today-task.is-done .today-task-check path,
+[data-theme='strawberry'] .today-task.is-done:not([aria-disabled='true']):hover .today-task-check path {
+  stroke: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .today-task.is-done .today-task-name {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .today-task-ink {
+  stroke: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .today-task-crumb {
+  fill: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .today-task.is-locked,
+[data-theme='strawberry'] .today-task.is-unavailable {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .today-task.is-locked .today-task-check path,
+[data-theme='strawberry'] .today-task.is-unavailable .today-task-check path {
+  stroke: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .today-tasks-progress {
+  background: var(--sb-line);
+}
+
+[data-theme='strawberry'] .today-tasks-progress > i {
+  background: var(--sb-berry);
+}
+
+/* ——— Notes to self: pink paper, pink bin ——— */
+
+[data-theme='strawberry'] .paper-notes-subtitle,
+[data-theme='strawberry'] .paper-ball-label small,
+[data-theme='strawberry'] .paper-empty p,
+[data-theme='strawberry'] .paper-notes-guide > p,
+[data-theme='strawberry'] .paper-notes-signoff > p,
+[data-theme='strawberry'] .paper-bin-caption,
+[data-theme='strawberry'] .paper-sheet-meta,
+[data-theme='strawberry'] .paper-sheet-saved {
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .paper-ball-shadow > span {
+  background: radial-gradient(closest-side, #8c2c4a38, #8c2c4a14 62%, transparent);
+}
+
+[data-theme='strawberry'] .paper-ball-label > span {
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .paper-ball:not(:disabled):hover .paper-ball-label > span,
+[data-theme='strawberry'] .paper-ball:focus-visible .paper-ball-label > span {
+  color: var(--sb-berry-deep);
+  text-decoration-color: var(--sb-pink);
+}
+
+[data-theme='strawberry'] .paper-ball-slot[data-gesture='held']::before {
+  border-color: var(--sb-line-strong);
+}
+
+[data-theme='strawberry'] .paper-ball-slot[data-gesture='target']::before {
+  border-color: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .paper-categories-title,
+[data-theme='strawberry'] .paper-category-count,
+[data-theme='strawberry'] .paper-notes-count {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .paper-categories button,
+[data-theme='strawberry'] .paper-kinds > button,
+[data-theme='strawberry'] .paper-sheet-close,
+[data-theme='strawberry'] .paper-sheet-discard {
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .paper-categories button:hover,
+[data-theme='strawberry'] .paper-categories button:focus-visible {
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .paper-categories button.is-selected {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .paper-categories button.is-selected .paper-category-count {
+  color: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .paper-categories-marker {
+  background: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .paper-bin-line {
+  stroke: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .paper-bin-ribs,
+[data-theme='strawberry'] .paper-bin-lip {
+  stroke: #8c2c4a1f;
+}
+
+[data-theme='strawberry'] .paper-bin-mouth-shade {
+  fill: var(--sb-shadow);
+}
+
+[data-theme='strawberry'] .paper-bin-poof {
+  stroke: var(--sb-rose);
+}
+
+[data-theme='strawberry'] .paper-bin-armed-hint {
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .paper-bin-layer.is-back linearGradient stop:nth-child(1) { stop-color: #fbe2e9; }
+[data-theme='strawberry'] .paper-bin-layer.is-back linearGradient stop:nth-child(2) { stop-color: #f2c3cf; }
+[data-theme='strawberry'] .paper-bin-layer.is-back linearGradient stop:nth-child(3) { stop-color: #dc9aad; }
+[data-theme='strawberry'] .paper-bin-layer.is-back radialGradient stop { stop-color: var(--sb-shadow); }
+[data-theme='strawberry'] .paper-bin-layer.is-front linearGradient stop:nth-child(1) { stop-color: #fff0f4; }
+[data-theme='strawberry'] .paper-bin-layer.is-front linearGradient stop:nth-child(2) { stop-color: #ffffff; }
+[data-theme='strawberry'] .paper-bin-layer.is-front linearGradient stop:nth-child(3) { stop-color: #f5d0da; }
+
+[data-theme='strawberry'] .paper-bin-undo {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .paper-bin-undo:not(:disabled):hover {
+  background: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .paper-empty-mark {
+  border-color: var(--sb-line-strong);
+  color: var(--sb-muted);
+}
+
+[data-theme='strawberry'] .paper-back {
+  border-color: var(--sb-line);
+  background: #fffafbcc;
+  color: var(--sb-ink-soft);
+}
+
+[data-theme='strawberry'] .paper-back:not(:disabled):hover {
+  border-color: var(--sb-pink);
+  background: white;
+  color: var(--sb-berry-deep);
+}
+
+[data-theme='strawberry'] .paper-new-note {
+  border-color: var(--sb-line);
+  background: white;
+  box-shadow: 0 4px 14px #e8506f12;
+}
+
+[data-theme='strawberry'] .paper-new-note:not(:disabled):hover,
+[data-theme='strawberry'] .paper-kinds > button.is-selected,
+[data-theme='strawberry'] .paper-sheet-discard.is-confirming {
+  border-color: var(--sb-berry);
+  background: var(--sb-berry);
+  color: white;
+}
+
+[data-theme='strawberry'] .paper-kinds > button:hover,
+[data-theme='strawberry'] .paper-sheet-discard:hover {
+  border-color: var(--sb-line);
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .paper-sheet-close:hover,
+[data-theme='strawberry'] .paper-sheet-close:focus-visible {
+  background: var(--sb-blush);
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .paper-sheet-close-hint {
+  border-color: var(--sb-line);
+  background: #fffafbf2;
+  color: var(--sb-mauve);
+}
+
+[data-theme='strawberry'] .paper-sheet-title {
+  border-bottom-color: #eba9bb66;
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .paper-sheet-title:focus {
+  border-bottom-color: var(--sb-berry);
+}
+
+[data-theme='strawberry'] .paper-sheet-title::placeholder,
+[data-theme='strawberry'] .paper-sheet-body::placeholder {
+  color: var(--sb-faint);
+}
+
+[data-theme='strawberry'] .paper-sheet-body {
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 29px, #eba9bb4d 29px, #eba9bb4d 30px) 0 -6px / 100% 30px repeat-y local;
+  color: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .paper-sheet-saved.is-error {
+  color: var(--sb-berry-deep);
+}
+
+@media (max-width: 600px) {
+  [data-theme='strawberry'] .paper-categories button:hover,
+  [data-theme='strawberry'] .paper-categories button:focus-visible {
+    border-color: var(--sb-line);
+  }
+
+  [data-theme='strawberry'] .paper-categories button.is-selected {
+    border-color: var(--sb-berry);
+    background: var(--sb-berry);
+    color: white;
+  }
+
+  [data-theme='strawberry'] .paper-categories button.is-selected .paper-category-count {
+    color: #ffd9e2;
+  }
+}
+
+/* ——— Cursor ——— */
+
+[data-theme='strawberry'] .cursor-shape,
+[data-theme='strawberry'] .blocked-cell-feedback path {
+  fill: #fff2f5;
+  stroke: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .cursor-detail > path:first-child {
+  fill: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .cursor-detail > path[stroke='#202020'] {
+  stroke: var(--sb-ink);
+}
+
+[data-theme='strawberry'] .custom-cursor > svg {
+  filter: drop-shadow(0 1px 1px #8c2c4a1f);
+}
+
+/* ——— A kept promise: seeds, petals and little hearts ——— */
+
+.berry-burst {
+  position: fixed;
+  z-index: 9000;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.berry-burst::before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: -15px;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--sb-pink);
+  border-radius: 50%;
+  opacity: 0;
+  animation: berry-ripple 680ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.berry-burst-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 9px;
+  height: 8px;
+  margin: -4px 0 0 -4.5px;
+  background: center / contain no-repeat;
+  opacity: 0;
+  animation: berry-burst-fly 920ms cubic-bezier(0.2, 0.75, 0.35, 1) var(--delay, 0ms) both;
+}
+
+.berry-burst-piece.is-seed {
+  width: 3.4px;
+  height: 5.2px;
+  margin: -2.6px 0 0 -1.7px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: #ffe39a;
+  box-shadow: inset 0 -0.7px #e5b04a;
+}
+
+.berry-burst-piece.is-heart {
+  background-image: url('../assets/strawberry/heart.svg');
+}
+
+.berry-burst-piece.is-petal {
+  width: 7px;
+  height: 8px;
+  margin: -4px 0 0 -3.5px;
+  background-image: url('../assets/strawberry/petal.svg');
+}
+
+.berry-burst-piece.is-sparkle {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background-image: url('../assets/strawberry/sparkle.svg');
+}
+
+@keyframes berry-ripple {
+  0% { opacity: 0.9; transform: scale(0.3); }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+
+@keyframes berry-burst-fly {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3) rotate(0deg);
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  58% {
+    opacity: 1;
+    transform:
+      translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px))
+      scale(var(--scale))
+      rotate(calc(var(--rotate) * 0.7deg));
+  }
+
+  100% {
+    opacity: 0;
+    transform:
+      translate(calc(var(--dx) * 1.1px), calc(var(--dy) * 1px + 13px))
+      scale(calc(var(--scale) * 0.7))
+      rotate(calc(var(--rotate) * 1deg));
+  }
+}
+
+/* ——— Smaller screens keep the corners clear ——— */
+
+@media (max-width: 1099px), (max-height: 680px) {
+  .strawberry-desk {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  [data-theme='strawberry'] .ambient-grid {
+    background-size: 384px 384px, 32px 32px, 32px 32px;
+  }
+
+  [data-theme='strawberry'] .legend {
+    gap: 10px;
+  }
+
+  [data-theme='strawberry'] .legend > span {
+    white-space: nowrap;
+  }
+}

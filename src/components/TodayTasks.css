@@ -162,24 +162,53 @@
 }
 
 .today-task-label {
+  position: relative;
   min-width: 0;
 }
 
-/* The line is a background so it can be drawn across the words, and across
-   both lines when a long name wraps. It runs in from the left as the task is
-   kept and leaves to the right when it is undone. */
+/* Kept tasks are crossed out with a hand-drawn zig-zag, drawn on an overlay
+   the size of the name so it can follow the words onto a second line. The
+   letters fade back as the pencil goes over them, and come forward again as
+   the eraser lifts it. */
 .today-task-name {
-  background: linear-gradient(#5c5c5c, #5c5c5c) no-repeat right 0 top 56% / 0% 1px;
   overflow-wrap: anywhere;
-  transition:
-    background-size 460ms cubic-bezier(0.65, 0, 0.35, 1),
-    color 320ms ease;
+  transition: color 420ms ease 80ms;
 }
 
 .today-task.is-done .today-task-name {
-  color: #9c9c9c;
-  background-position: left 0 top 56%;
-  background-size: 100% 1px;
+  color: #7d7d7d;
+  transition: color 520ms ease 150ms;
+}
+
+.today-task-scribble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.today-task-ink {
+  fill: none;
+  stroke: #5c5c5c;
+  stroke-width: 1.05px;
+  opacity: 0.85;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Where the eraser has been, drawn into the ink's mask. */
+.today-task-rub {
+  fill: none;
+  stroke: black;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.today-task-crumb {
+  fill: #9f9f9f;
 }
 
 .today-task.is-locked,
@@ -198,10 +227,6 @@
 
 .today-tasks.is-arriving .today-task-check {
   animation: today-task-check-arrive 520ms cubic-bezier(0.3, 0.7, 0.3, 1) calc(var(--enter-delay, 0ms) + 110ms) both;
-}
-
-.today-tasks.is-arriving .today-task.is-done .today-task-name {
-  animation: today-task-strike 520ms cubic-bezier(0.65, 0, 0.35, 1) calc(var(--enter-delay, 0ms) + 280ms) both;
 }
 
 .today-tasks-summary {
@@ -259,10 +284,6 @@
 
 @keyframes today-task-check-arrive {
   from { opacity: 0; transform: scale(0.45) rotate(-14deg); }
-}
-
-@keyframes today-task-strike {
-  from { background-size: 0% 1px; }
 }
 
 /* Only the layouts with room for the day note have room for its list. */

@@ -1,6 +1,6 @@
 # ANGELO
 
-ANGELO is a quiet, monochrome habit tracker built with React, TypeScript, and Vite. It works fully as a guest, with the routine stored on the device. An optional account adds cloud sync, a unique username, and a public profile that other people can find and follow from the people drawer.
+ANGELO is a quiet, monochrome habit tracker built with React, TypeScript, and Vite, with an optional strawberry theme for a softer, pinker look and a dark, blood-red Dismantle theme. It works fully as a guest, with the routine stored on the device. An optional account adds cloud sync, a unique username, and a public profile that other people can find and follow from the people drawer.
 
 Registered profiles are public by default. The public view shares the circular routine layout, habit plans, and check-in history so another person can browse the same monthly practice view. Passwords, sessions, reminder text, daily notes, and notes to self remain private. A signed-in user can make the profile private.
 
@@ -142,7 +142,7 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 - Habits use effective-dated monthly plans: changing September leaves August intact and applies from September forward until another month has its own plan. A habit first added during the current month begins on that day.
 - Settings open on the current month, can switch through tracked months, support up to nine habits per monthly plan, and save every valid change automatically.
 - The first guest visit includes starter habits and clearly labeled sample progress.
-- The **Today is a good day** note opens today's tasks where it sits: every habit for the day as a plain list on the page, no card around it. Checking a task folds its box into a tick and draws a line through it; unchecking unfolds the tick and the line slides away. Changes show on the wheel straight away.
+- The **Today is a good day** note opens today's tasks where it sits: every habit for the day as a plain list on the page, no card around it. Over the list the cursor turns into a pencil. Checking a task folds its box into a tick while the pencil scribbles the name out with a hand-drawn zig-zag and then glides back to the pointer. Over a task already crossed out, the pencil turns into an eraser: clicking rubs the scribble away, crumbs and all, and the tick unfolds back into a box. From the keyboard, or on a touch screen, the zig-zag draws and rubs itself out. Changes show on the wheel straight away.
 - While the list is open, clicking a date on the wheel moves the list to that day: a ring travels round the wheel to the date, and the tasks take on that day in a wave down the list (or up it, going back in time). Future days are locked, and habits that had not started yet are dashed out.
 - Clicking anywhere else, or pressing Escape, puts the list away and brings the note back. Up and down arrow keys move between tasks.
 - Keyboard navigation, focus management, reduced motion, and touch input are supported.
@@ -166,3 +166,30 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 - Leaving folds the guide into a small, quiet Anri control in the bottom-right corner, and that control replays the guide at any time. Hovering it shows a hint with Anri peeking over it.
 - The guide is shown once. Finishing or skipping it is remembered on the device, and a guide closed halfway comes back on the next visit. Anyone who used the app before the guide existed is not greeted again; the corner control still opens it.
 - The guide's code, Anri's poses, and the handwriting font load only when it opens, and every page's final state is shown at once when the system asks for reduced motion.
+
+## Themes
+
+- **Make it yours** (the settings control) opens with **Your theme**: one swatch per theme, each a tiny version of the wheel drawn in its own colours. Picking one changes the whole app at once; where the browser supports view transitions, the new look spreads out in a circle from the swatch (Dismantle instead cuts the old look open along a glowing line). Arrow keys move between the swatches like any radio group.
+- **Monochrome** is the default and is unchanged: ink on paper.
+- **Strawberry** is blush pink with a cute, soft-girl-grind voice and small strawberry details:
+  - The usual grid stays, drawn in pink, with a tiny berry or heart pinned to it here and there.
+  - Kept promises become ripe berry flesh with a few seeds in tiny dimples. The flesh deepens from the middle of the wheel outwards, like a halved strawberry, and one continuous fill means a streak of kept days reads as one berry.
+  - Pink words are glossy berry syrup that slowly flows through the letters: the title's last word, the consistency score (crowned with a blossom that twirls whenever the score moves), and the other emphasised words.
+  - The page speaks in the theme's voice: the stock title reads **Soft Girl Grind** (a title someone wrote is never changed, and other people's titles always show as written), and the eyebrow, notes around the wheel, legend, footer, month caption and notes heading get softer lines such as "Berry serious about showing up."
+  - A few faint bits of stationery sit around the page on larger screens — a pink ruler, two gel pens, a strip of washi tape holding the day note — with Anri in a pink jumper writing in her planner.
+  - Keeping a promise, on the wheel or in today's list, sends out a small shower of seeds, petals, hearts and sparkles.
+  - Day notes are blush ruled paper held by a strawberry pin; notes to self are crumpled pink paper with a pink bin; tooltips, panels, the cursor, the flash reminder and the people drawer follow the palette.
+- **Dismantle** is a dark theme after the King of Curses' cutting technique, black with blood-red highlights and a domination-and-grind voice:
+  - The page is black, ruled with a dark blood-red grid. A few faint old cuts across it catch the light now and then, a fresh one is made every so often, and a shrine stands under a blood moon on the empty side of the page.
+  - Anri appears only on the settings and account pages, in front of the shrine with her hands in a domain-expansion sign. The Sukuna-style markings on her face, under her eyes and on her forehead, flare red as she arrives and then keep breathing faintly.
+  - Kept promises are fresh blood, darkening towards the rim of the wheel and crossed by faint old cuts. The score is blood with a blade's glint running over it, crowned with two fresh cuts that flinch whenever it moves.
+  - When the wheel sweeps away it is actually cut to pieces. Blades streak round the rings from the top, and each tile one passes through splits along that line, with a white hairline that opens into a red seam. The piece above the cut slips down along it, and the pieces fall away. Coming back, the tiles mend into place.
+  - The page speaks in the theme's voice. The stock title reads **Malevolent Grind** (as with Strawberry, a title someone wrote is never changed). The habits are **Cursed techniques**, the score is **Dominance**, kept cells are **Dismantled**, and notes to self are **Binding vows**.
+  - Keeping a promise sends two quick crossing cuts and a spray of blood. In today's list a kept task is slashed rather than scribbled: a long cut rises through the name, short ones cross it, and a name on one line falls apart into two halves along the cut.
+  - Notes to self drop in as fireballs that flare and throw sparks when they land. The homepage burns away underneath them like paper: ragged holes with a scorched brown edge, a black char line and a glowing ember rim, creeping outwards until the whole page goes up.
+  - Day notes are dark talismans pinned with a drop of blood. The unfolded note is bone paper with red rules, and panels, tooltips, the cursor, the flash reminder and the people drawer all follow the palette.
+- The choice is a preference for this browser, stored under `angelo-theme-v1` only once someone picks a theme, so it never makes a first-time visitor look like a returning one. It is not synced to an account and is never shown on a public profile: everyone sees other people's circles in their own theme. Other open tabs follow a change straight away, and the theme is applied before the app first paints.
+- Reduced motion switches themes instantly and leaves out the bursts, the twirl, the flowing syrup, Anri's bobbing, the glowing cuts, the shattering wheel, the fireballs and the burning page; the wheel and the homepage simply go, as in the other themes.
+- The welcome guide keeps its own sketchbook style in every theme.
+
+To add a theme, add its entry to `THEMES` in `src/lib/theme.ts` (name, caption, swatch colours, paper and flash colours, and its words — spread `MONOCHROME_COPY` to keep the defaults), then add a stylesheet in `src/themes/` whose rules are all scoped to `[data-theme='your-id']` and import it in `src/main.tsx`. The berry sticker, stationery and Anri artwork in `src/assets/strawberry/` were made for the strawberry theme with an image-generation model, using Anri's existing poses as reference. The same goes for Dismantle's art in `src/assets/dismantle/`: Anri's domain-expansion pose, her markings as a separate glow layer, her peeking sticker, the shrine and the fireball.

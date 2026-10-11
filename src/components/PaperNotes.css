@@ -135,6 +135,11 @@
   will-change: transform;
 }
 
+/* Flames, for the themes whose notes drop in burning. */
+.paper-ball-fire {
+  display: none;
+}
+
 .paper-ball-lift {
   position: relative;
   display: grid;

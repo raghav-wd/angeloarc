@@ -1,7 +1,15 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react'
 import type { CursorFeedback } from './CustomCursor'
+import { TaskScribble } from './TaskScribble'
+import type { ScribbleRequest, TaskTool, TaskToolHand } from './TaskScribble'
+import { useTheme } from '../hooks/useTheme'
+import { spawnBerryBurst } from '../lib/berryBurst'
 import { checkboxMorphPath, checkboxMorphProgress } from '../lib/checkboxMorph'
+import { getCursorMode, setCursorMode } from '../lib/cursorMode'
+import { CURSOR_TOOL_MODES } from '../lib/cursorMorph'
+import type { CursorMode } from '../lib/cursorMorph'
+import { spawnSlashBurst } from '../lib/dismantle'
 import {
   getDayTasks,
   taskDateDirection,
@@ -12,6 +20,7 @@ import {
   TODAY_TASKS_ID,
 } from '../lib/dayTasks'
 import type { DayTask, TaskDate, TaskDirection } from '../lib/dayTasks'
+import { scribbleSeed } from '../lib/scribble'
 import { formatFullDate, monthKey } from '../lib/tracker'
 import type { MonthHabit, TrackerState } from '../lib/tracker'
 import './TodayTasks.css'
@@ -20,8 +29,9 @@ import './TodayTasks.css'
 const ENTER_HEADER_DELAY = 140
 const ENTER_ROW_DELAY = 250
 const ENTER_STAGGER = 45
-// Kept rows draw their line once they have landed; the list stays in its
-// arriving state until the last line is drawn.
+// Kept rows scribble out their names once they have landed; the list stays
+// in its arriving state until the last one is done.
+const ENTER_SCRIBBLE_DELAY = 280
 const ENTER_STRIKE_DURATION = 900
 // Leaving runs the other way: summary first, rows bottom to top, header last.
 const LEAVE_STAGGER = 26
@@ -48,6 +58,69 @@ function prefersReducedMotion(): boolean {
 
 function timing(enter: number, leave: number): CSSProperties {
   return { '--enter-delay': `${enter}ms`, '--leave-delay': `${leave}ms` } as CSSProperties
+}
+
+interface ListToolHand extends TaskToolHand {
+  /** The pointer is over the list, on this element. */
+  over(target: EventTarget | null): void
+  /** The pointer has left the list. */
+  out(): void
+  /** A list that is leaving, or gone, hands no tools out. */
+  setClosed(closed: boolean): void
+}
+
+/**
+ * Over the list the cursor is a pencil, and an eraser over a task already
+ * crossed out. A tool at work stays in hand until it is finished.
+ */
+function createToolHand(): ListToolHand {
+  let inside = false
+  let closed = false
+  let hovered: Element | null = null
+  let holding: { owner: object; tool: TaskTool } | null = null
+
+  function sync() {
+    let mode: CursorMode = 'pointer'
+    if (holding) {
+      mode = holding.tool
+    } else if (inside && !closed) {
+      const kept = hovered?.classList.contains('is-done') && hovered.getAttribute('aria-disabled') !== 'true'
+      mode = kept ? 'eraser' : 'pencil'
+    }
+    // Only take back a tool this list handed out; any other mode belongs to someone else.
+    if (mode !== 'pointer' || CURSOR_TOOL_MODES.has(getCursorMode())) setCursorMode(mode)
+  }
+
+  return {
+    over(target) {
+      inside = true
+      hovered = target instanceof Element ? target.closest('.today-task') : null
+      sync()
+    },
+    out() {
+      inside = false
+      hovered = null
+      sync()
+    },
+    setClosed(next) {
+      closed = next
+      if (next) {
+        inside = false
+        hovered = null
+      }
+      sync()
+    },
+    hold(owner, tool) {
+      holding = { owner, tool }
+      sync()
+    },
+    drop(owner) {
+      if (holding?.owner !== owner) return
+      holding = null
+      sync()
+    },
+    sync,
+  }
 }
 
 /** Text that rolls away in the direction of travel as a new value rolls in. */
@@ -131,6 +204,8 @@ function TaskCheck({ checked }: { checked: boolean }) {
 
 interface ShownTask {
   wave: number
+  /** The day the row is showing, which shapes its scribble. */
+  key: string
   done: boolean
   available: boolean
   locked: boolean
@@ -138,39 +213,56 @@ interface ShownTask {
 
 function TaskRow({
   task,
+  dayKey,
   locked,
   index,
   count,
   wave,
   direction,
+  enterDelay,
+  hand,
   onToggle,
 }: {
   task: DayTask
+  dayKey: string
   locked: boolean
   index: number
   count: number
   wave: number
   direction: TaskDirection
+  enterDelay: number
+  hand: TaskToolHand
   onToggle: (habit: MonthHabit, feedback: CursorFeedback) => void
 }) {
   const row = useRef<HTMLButtonElement>(null)
+  const name = useRef<HTMLSpanElement>(null)
+  const scribble = useRef<ScribbleRequest | null>(null)
   const nudge = useRef<Animation | null>(null)
   const lastWave = useRef(wave)
+  const theme = useTheme()
+  const strawberry = theme === 'strawberry'
+  const dismantle = theme === 'dismantle'
   const waveDelay = taskWaveDelay(index, count, direction)
-  const [shown, setShown] = useState<ShownTask>(() => ({ wave, done: task.done, available: task.available, locked }))
+  const [shown, setShown] = useState<ShownTask>(() => ({
+    wave,
+    key: dayKey,
+    done: task.done,
+    available: task.available,
+    locked,
+  }))
   // A click on this row shows at once; a new day only reaches it with the wave.
   if (shown.wave === wave && (shown.done !== task.done || shown.available !== task.available || shown.locked !== locked)) {
-    setShown({ wave, done: task.done, available: task.available, locked })
+    setShown({ wave, key: dayKey, done: task.done, available: task.available, locked })
   }
 
   useEffect(() => {
     if (shown.wave === wave) return
     const timer = setTimeout(
-      () => setShown({ wave, done: task.done, available: task.available, locked }),
+      () => setShown({ wave, key: dayKey, done: task.done, available: task.available, locked }),
       prefersReducedMotion() ? 0 : waveDelay + WAVE_SWAP,
     )
     return () => clearTimeout(timer)
-  }, [locked, shown.wave, task.available, task.done, wave, waveDelay])
+  }, [dayKey, locked, shown.wave, task.available, task.done, wave, waveDelay])
 
   useLayoutEffect(() => {
     if (lastWave.current === wave) return
@@ -191,12 +283,31 @@ function TaskRow({
 
   function activate(event: MouseEvent<HTMLButtonElement>) {
     const nativeEvent = event.nativeEvent
-    if (nativeEvent instanceof PointerEvent && nativeEvent.pointerType) {
-      onToggle(task.habit, { x: event.clientX, y: event.clientY, followPointer: nativeEvent.pointerType === 'mouse' })
+    const pointerType = nativeEvent instanceof PointerEvent ? nativeEvent.pointerType : ''
+    const button = event.currentTarget
+    const box = button.querySelector('.today-task-check')?.getBoundingClientRect() ?? button.getBoundingClientRect()
+    if (!locked && task.available) {
+      // With a mouse the cursor does the writing itself, from where it was clicked.
+      const handsOn = pointerType === 'mouse' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+      scribble.current = {
+        tool: task.done ? 'eraser' : 'pencil',
+        from: handsOn ? { x: event.clientX, y: event.clientY } : null,
+        at: performance.now(),
+      }
+      if (strawberry || dismantle) {
+        // Judged once the click has committed: a first tap on sample progress
+        // clears it before keeping the promise.
+        requestAnimationFrame(() => {
+          if (button.getAttribute('aria-checked') !== 'true') return
+          const burst = strawberry ? spawnBerryBurst : spawnSlashBurst
+          burst(box.x + box.width / 2, box.y + box.height / 2)
+        })
+      }
+    }
+    if (pointerType) {
+      onToggle(task.habit, { x: event.clientX, y: event.clientY, followPointer: pointerType === 'mouse' })
       return
     }
-    const box = event.currentTarget.querySelector('.today-task-check')?.getBoundingClientRect()
-      ?? event.currentTarget.getBoundingClientRect()
     onToggle(task.habit, { x: box.x + box.width / 2, y: box.y + box.height / 2, followPointer: false })
   }
 
@@ -218,9 +329,22 @@ function TaskRow({
       onClick={activate}
     >
       <TaskCheck checked={shown.done} />
-      <span className="today-task-label">
-        <span className="today-task-name">{task.habit.name}</span>
+      <span className="today-task-label" data-name={dismantle ? task.habit.name : undefined}>
+        <span ref={name} className="today-task-name">{task.habit.name}</span>
         {status && <span className="sr-only">, {status}</span>}
+        <TaskScribble
+          done={shown.done}
+          seed={scribbleSeed(task.habit.id, shown.key)}
+          name={name}
+          takeRequest={() => {
+            const asked = scribble.current
+            scribble.current = null
+            return asked
+          }}
+          enterDelay={enterDelay}
+          hand={hand}
+          strike={dismantle ? 'slash' : 'scribble'}
+        />
       </span>
     </button>
   )
@@ -259,8 +383,14 @@ export function TodayTasks({ state, date, today, leaving, onToggle, onDismiss, o
   }
   const dismiss = useEffectEvent(onDismiss)
   const finishLeaving = useEffectEvent(onLeft)
+  const [hand] = useState(createToolHand)
   const fullDate = formatFullDate(date.month, date.day)
   const progress = day.total === 0 ? 0 : day.completed / day.total
+
+  useEffect(() => {
+    hand.setClosed(leaving)
+    return () => hand.setClosed(true)
+  }, [hand, leaving])
 
   useEffect(() => {
     const first = root.current?.querySelector<HTMLElement>('.today-task:not([aria-disabled="true"])')
@@ -340,6 +470,10 @@ export function TodayTasks({ state, date, today, leaving, onToggle, onDismiss, o
       tabIndex={-1}
       inert={leaving}
       onKeyDown={moveFocus}
+      onPointerMove={(event) => {
+        if (event.pointerType !== 'touch') hand.over(event.target)
+      }}
+      onPointerLeave={() => hand.out()}
     >
       <header className="today-tasks-header" aria-hidden="true">
         <p className="today-tasks-eyebrow" style={timing(ENTER_HEADER_DELAY, (count + 1) * LEAVE_STAGGER)}>
@@ -370,11 +504,16 @@ export function TodayTasks({ state, date, today, leaving, onToggle, onDismiss, o
             >
               <TaskRow
                 task={task}
+                dayKey={day.key}
                 locked={day.future}
                 index={index}
                 count={count}
                 wave={travel.wave}
                 direction={travel.direction}
+                enterDelay={arriving && travel.wave === 0
+                  ? ENTER_ROW_DELAY + index * ENTER_STAGGER + ENTER_SCRIBBLE_DELAY
+                  : 0}
+                hand={hand}
                 onToggle={(habit, feedback) => onToggle(date, habit, feedback)}
               />
             </li>

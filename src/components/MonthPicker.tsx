@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTheme } from '../hooks/useTheme'
+import { themeDefinition } from '../lib/theme'
 import { monthKey, shiftMonth } from '../lib/tracker'
 import type { Month } from '../lib/tracker'
 
@@ -18,6 +20,7 @@ export function MonthPicker({ month, today, onChange }: MonthPickerProps) {
   const [year, setYear] = useState(month.year)
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
+  const theme = useTheme()
   const currentMonth = { year: today.getFullYear(), month: today.getMonth() }
   const isCurrent = monthKey(month) === monthKey(currentMonth)
 
@@ -123,7 +126,7 @@ export function MonthPicker({ month, today, onChange }: MonthPickerProps) {
       </div>
       <div className="month-caption">
         {isCurrent ? (
-          <span>A NEW DAY. ANOTHER CHANCE.</span>
+          <span>{themeDefinition(theme).copy.monthCaption}</span>
         ) : (
           <button onClick={() => choose(currentMonth)}>Return to this month <span aria-hidden="true">&rarr;</span></button>
         )}

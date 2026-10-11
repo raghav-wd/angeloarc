@@ -1,5 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { buildFlashTimeline, fillNoise, FLASH_PALETTES, flashWordAt } from '../lib/flashReminder'
+import { useTheme } from '../hooks/useTheme'
+import { buildFlashTimeline, fillNoise, flashWordAt } from '../lib/flashReminder'
+import { themeDefinition } from '../lib/theme'
 import type { CSSProperties } from 'react'
 import './FlashReminder.css'
 
@@ -17,6 +19,7 @@ export function FlashReminder({ message, onClose }: FlashReminderProps) {
   const noiseCanvas = useRef<HTMLCanvasElement>(null)
   const close = useEffectEvent(onClose)
   const timeline = useMemo(() => buildFlashTimeline(message), [message])
+  const theme = useTheme()
   const [leaving, setLeaving] = useState(false)
   const [wordIndex, setWordIndex] = useState(0)
   const [mode] = useState<'flash' | 'still'>(() =>
@@ -92,7 +95,8 @@ export function FlashReminder({ message, onClose }: FlashReminderProps) {
   }, [])
 
   const word = timeline[wordIndex]
-  const palette = mode === 'still' ? FLASH_PALETTES.black : word
+  const palettes = themeDefinition(theme).flash
+  const palette = palettes[mode === 'still' ? 'black' : word.palette]
   const grit = `flash-grit-${wordIndex}`
 
   return (
@@ -136,7 +140,7 @@ export function FlashReminder({ message, onClose }: FlashReminderProps) {
               </feMerge>
               <feTurbulence type="fractalNoise" baseFrequency="0.009 0.05" numOctaves="2" seed={3 + wordIndex * 11} result="warp" />
               <feDisplacementMap in="assembled" in2="warp" xChannelSelector="R" yChannelSelector="G" scale={Math.round(6 + word.fontSizeVw * 0.3)} result="shape" />
-              <feFlood floodColor={word.ink} result="paint" />
+              <feFlood floodColor={palette.ink} result="paint" />
               <feComposite in="paint" in2="shape" operator="in" />
             </filter>
           </defs>

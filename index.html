@@ -10,6 +10,13 @@
       content="A little better, every day. ANGELO is a quiet space to build your daily habits, one check-in at a time."
     />
     <title>ANGELO — The daily practice</title>
+    <script>
+      // Paint the chosen theme before the app loads, so it never flashes in the default one.
+      try {
+        var theme = localStorage.getItem('angelo-theme-v1')
+        if (theme && /^[a-z][a-z-]{0,31}$/.test(theme)) document.documentElement.dataset.theme = theme
+      } catch (error) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

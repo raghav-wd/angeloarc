@@ -105,6 +105,13 @@ p {
   border: 0;
 }
 
+/* Choosing a theme: the new look spreads out in a circle over the old one. */
+:root.is-theme-switching::view-transition-old(root),
+:root.is-theme-switching::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

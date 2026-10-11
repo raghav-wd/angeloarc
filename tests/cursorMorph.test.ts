@@ -3,12 +3,17 @@ import { describe, it } from 'node:test'
 import {
   createCursorMorph,
   CROSS_CURSOR_PATH,
+  CROSS_CURSOR_SHAPE,
+  CURSOR_HOTSPOT,
   CURSOR_MODE_SHAPES,
   CURSOR_MORPH_DURATION,
+  CURSOR_TOOL_DETAILS,
+  CURSOR_TOOL_MODES,
   cursorMorphPath,
   cursorMorphProgress,
   cursorShapeEase,
   cursorShapePath,
+  cursorShapeTurn,
   TRIANGLE_CURSOR_PATH,
 } from '../src/lib/cursorMorph.ts'
 import type { CursorContour, CursorShape } from '../src/lib/cursorMorph.ts'
@@ -190,5 +195,104 @@ describe('cursor shapes for picking things up', () => {
     assert.ok(cursorShapeEase(0.25) > 0.25)
     const morph = createCursorMorph(CURSOR_MODE_SHAPES.pointer, CURSOR_MODE_SHAPES.grab)
     for (const value of [-0.1, 1.1, NaN, Infinity]) assert.throws(() => morph(value), /progress/)
+  })
+})
+
+function coordinatePairs(path: string): Array<[number, number]> {
+  const numbers = coordinates(path)
+  return Array.from({ length: numbers.length / 2 }, (_, index) => [numbers[index * 2], numbers[index * 2 + 1]])
+}
+
+function heading(shape: CursorShape): number {
+  const points = shape.flat()
+  const x = points.reduce((sum, [pointX]) => sum + pointX, 0) / points.length
+  const y = points.reduce((sum, [, pointY]) => sum + pointY, 0) / points.length
+  return Math.atan2(y - CURSOR_HOTSPOT[1], x - CURSOR_HOTSPOT[0])
+}
+
+describe('pencil and eraser cursors', () => {
+  it('puts the point of the pencil and the face of the eraser on the hotspot', () => {
+    for (const mode of ['pencil', 'eraser'] as const) {
+      const [contour] = CURSOR_MODE_SHAPES[mode]
+      assert.deepEqual(contour[0].map((value) => Number(value.toFixed(9))), [...CURSOR_HOTSPOT])
+      assert.ok(CURSOR_TOOL_MODES.has(mode))
+    }
+    assert.ok(!CURSOR_TOOL_MODES.has('pointer') && !CURSOR_TOOL_MODES.has('grab'))
+  })
+
+  it('holds both the way a right hand does, leaning up and away to the right', () => {
+    for (const mode of ['pencil', 'eraser'] as const) {
+      const box = bounds(CURSOR_MODE_SHAPES[mode])
+      assert.ok(box.right > 15 && box.top < -9, `${mode} leans up and right`)
+      assert.ok(box.left > -1 && box.bottom < 7, `${mode} stays off the text below and to the left`)
+      assert.ok(Math.abs(heading(CURSOR_MODE_SHAPES[mode]) + Math.PI / 4) < 0.05, `${mode} leans at 45 degrees`)
+    }
+    const pencil = bounds(CURSOR_MODE_SHAPES.pencil)
+    const eraser = bounds(CURSOR_MODE_SHAPES.eraser)
+    assert.ok(pencil.right - pencil.left > eraser.right - eraser.left, 'the pencil is the longer of the two')
+  })
+
+  it('draws the inked details inside the tool they belong to', () => {
+    for (const mode of ['pencil', 'eraser'] as const) {
+      const outline = bounds(CURSOR_MODE_SHAPES[mode])
+      const { fill, lines, marks } = CURSOR_TOOL_DETAILS[mode]
+      const points = [fill, lines, marks].flatMap(coordinatePairs)
+      assert.ok(points.length > 3)
+      for (const [x, y] of points) {
+        assert.ok(Number.isFinite(x) && Number.isFinite(y))
+        assert.ok(x >= outline.left - 0.01 && x <= outline.right + 0.01 && y >= outline.top - 0.01 && y <= outline.bottom + 0.01)
+      }
+    }
+  })
+
+  it('exposes the cross as a shape so any tool can turn into it', () => {
+    assert.equal(cursorShapePath(CROSS_CURSOR_SHAPE), CROSS_CURSOR_PATH)
+    const refuse = createCursorMorph(CURSOR_MODE_SHAPES.pencil, CROSS_CURSOR_SHAPE)
+    for (const point of refuse(1)[0]) assert.ok(distanceToOutline(point, CROSS_CURSOR_SHAPE[0]) < 1e-6)
+  })
+})
+
+describe('swinging between outlines that face different ways', () => {
+  it('finds the shortest turn from one heading to another', () => {
+    const toPencil = cursorShapeTurn(CURSOR_MODE_SHAPES.pointer, CURSOR_MODE_SHAPES.pencil, CURSOR_HOTSPOT)
+    assert.ok(toPencil < -Math.PI / 3 && toPencil > -Math.PI * 0.75, `the arrow swings up into the pencil (${toPencil})`)
+    assert.ok(Math.abs(cursorShapeTurn(CURSOR_MODE_SHAPES.pencil, CURSOR_MODE_SHAPES.pointer, CURSOR_HOTSPOT) + toPencil) < 1e-9)
+    assert.ok(Math.abs(cursorShapeTurn(CURSOR_MODE_SHAPES.pencil, CURSOR_MODE_SHAPES.eraser, CURSOR_HOTSPOT)) < 1e-6)
+    // Shapes gathered round the hotspot face no particular way.
+    assert.equal(cursorShapeTurn(CURSOR_MODE_SHAPES.pointer, CURSOR_MODE_SHAPES.grab, CURSOR_HOTSPOT), 0)
+    assert.equal(cursorShapeTurn(CURSOR_MODE_SHAPES.grab, CURSOR_MODE_SHAPES.switch, CURSOR_HOTSPOT), 0)
+  })
+
+  it('turns steadily about the hotspot and lands exactly on each outline', () => {
+    const pairs = [['pointer', 'pencil'], ['pencil', 'eraser'], ['eraser', 'pointer'], ['pencil', 'pointer']] as const
+    for (const [from, to] of pairs) {
+      const morph = createCursorMorph(CURSOR_MODE_SHAPES[from], CURSOR_MODE_SHAPES[to], { pivot: CURSOR_HOTSPOT })
+      CURSOR_MODE_SHAPES[from][0].forEach((corner) => {
+        assert.ok(morph(0)[0].some(([x, y]) => Math.hypot(x - corner[0], y - corner[1]) < 1e-6), `${from} start`)
+      })
+      for (const point of morph(1)[0]) assert.ok(distanceToOutline(point, CURSOR_MODE_SHAPES[to][0]) < 1e-6, `${to} end`)
+      const turn = cursorShapeTurn(CURSOR_MODE_SHAPES[from], CURSOR_MODE_SHAPES[to], CURSOR_HOTSPOT)
+      let last = heading(morph(0))
+      for (let step = 1; step <= 20; step += 1) {
+        const next = heading(morph(step / 20))
+        // The heading only ever moves the way of the turn.
+        if (Math.abs(turn) > 0.1) assert.ok(Math.sign(next - last) === Math.sign(turn) || Math.abs(next - last) < 1e-6)
+        last = next
+      }
+    }
+  })
+
+  it('keeps the working end by the hotspot all the way round', () => {
+    const morph = createCursorMorph(CURSOR_MODE_SHAPES.pointer, CURSOR_MODE_SHAPES.pencil, { pivot: CURSOR_HOTSPOT })
+    for (let step = 0; step <= 20; step += 1) {
+      const [x, y] = morph(step / 20)[0][0]
+      assert.ok(Math.hypot(x - CURSOR_HOTSPOT[0], y - CURSOR_HOTSPOT[1]) <= 0.5 + 1e-9)
+    }
+  })
+
+  it('morphs shapes round the hotspot exactly as before', () => {
+    const plain = createCursorMorph(CURSOR_MODE_SHAPES.grab, CURSOR_MODE_SHAPES.switch)
+    const pivoted = createCursorMorph(CURSOR_MODE_SHAPES.grab, CURSOR_MODE_SHAPES.switch, { pivot: CURSOR_HOTSPOT })
+    for (const progress of [0, 0.3, 0.7, 1]) assert.deepEqual(pivoted(progress), plain(progress))
   })
 })

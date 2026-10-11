@@ -8,7 +8,12 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { setCursorMode } from '../lib/cursorMode'
+import { burnShape, fireIntensity, spawnEmbers } from '../lib/dismantle'
 import { haptic } from '../lib/haptics'
+import { createPaperBurn } from '../lib/paperBurn'
+import type { PaperBurn } from '../lib/paperBurn'
+import { themeDefinition } from '../lib/theme'
+import { themeStore, useTheme } from '../hooks/useTheme'
 import {
   BIN_DRAWING,
   BIN_RIM_LIFT,
@@ -146,6 +151,8 @@ interface Body {
   /** Stretch along the direction it is travelling. */
   stretch: number
   stretchAngle: number
+  /** When it began to fall, burning, in Dismantle. */
+  fireFrom: number
 }
 
 interface BallElements {
@@ -158,6 +165,8 @@ interface BallElements {
   drawnRotation: Rotation | null
   drawnSize: number
   moving: boolean
+  /** How fiercely it was last drawn burning. */
+  fire: number
 }
 
 /** How a ball sits among the others while it is handled; it decides what it is drawn over. */
@@ -199,6 +208,8 @@ interface Dissolve {
   origin: number
   sweepStart: number
   done: boolean
+  /** In Dismantle the page burns away instead of coming apart in patches. */
+  burn: PaperBurn | null
 }
 
 interface OpenSheet {
@@ -213,6 +224,10 @@ const START_LIFT = 1.75
 const BOUNCE_LIFT = 0.2
 const DISSOLVE_SWEEP = 430
 const DISSOLVE_FEATHER = 26
+// Burning takes a little longer than coming apart, so the fire can be seen to spread.
+const BURN_SWEEP = 760
+// A note dropped burning glows on a while after it lands.
+const FIRE_LIFE = 1700
 const EXIT_DURATION = 580
 const RELAYOUT_DURATION = 520
 const FILTER_EXIT_DURATION = 660
@@ -286,6 +301,7 @@ function createBody(id: string, x: number, y: number, extra: Partial<Body> = {})
     shade: 1,
     stretch: 0,
     stretchAngle: 0,
+    fireFrom: -Infinity,
     ...extra,
   }
 }
@@ -393,9 +409,19 @@ function drawBall(elements: BallElements, mesh: PaperMesh, rotation: Rotation, d
     unfold: 0,
     rotation,
   }, frame)
-  paintPaperFrame(context, mesh, frame, 0)
+  paintPaperFrame(context, mesh, frame, 0, currentPaperInk())
   elements.drawnRotation = rotation
   elements.drawnSize = diameter
+}
+
+// Paper is painted imperatively, so it reads the theme at the moment it is drawn.
+function currentPaperInk() {
+  return themeDefinition(themeStore().getSnapshot()).paperInk
+}
+
+// Notes to self only drop in burning, and burn the page away, in Dismantle.
+function burnsHere(): boolean {
+  return themeStore().getSnapshot() === 'dismantle'
 }
 
 function applyDissolve(dissolve: Dissolve, now: number, viewport: Viewport): boolean {
@@ -456,11 +482,14 @@ export function PaperNotes({
   const [announcement, setAnnouncement] = useState('')
   const bodies = useRef(new Map<string, Body>())
   const elements = useRef(new Map<string, BallElements>())
+  const theme = useTheme()
+  const paintedTheme = useRef(theme)
   const rests = useRef(new Map<string, ClusterPoint>())
   const layoutRef = useRef<ClusterLayout | null>(null)
   const viewportRef = useRef(viewport)
   const binRef = useRef<BinPlacement>({ x: 0, y: 0, scale: 1 })
   const dissolve = useRef<Dissolve | null>(null)
+  const burnCanvas = useRef<HTMLCanvasElement>(null)
   const frameRequest = useRef(0)
   const lastFrame = useRef(0)
   const phaseRef = useRef(phase)
@@ -560,6 +589,17 @@ export function PaperNotes({
       if (moving) parts.slot.dataset.moving = 'true'
       else delete parts.slot.dataset.moving
     }
+    const fire = burnsHere() ? fireIntensity(now - body.fireFrom, DROP_FALL_DURATION) : 0
+    if (parts.fire !== fire) {
+      parts.fire = fire
+      if (fire > 0) {
+        parts.body.style.setProperty('--fire', fire.toFixed(3))
+        parts.slot.dataset.burning = 'true'
+      } else {
+        parts.body.style.removeProperty('--fire')
+        delete parts.slot.dataset.burning
+      }
+    }
     if (currentLayout && (parts.drawnRotation !== body.rotation || Math.abs(parts.drawnSize - currentLayout.ball) > 0.01)) {
       drawBall(parts, meshFor(body.id), body.rotation, currentLayout.ball)
     }
@@ -607,6 +647,7 @@ export function PaperNotes({
       if (!rest) return
       const { plan } = motion
       const elapsed = now - motion.start - plan.start
+      body.fireFrom = motion.start + plan.start
       if (elapsed < 0) {
         body.opacity = 0
         body.lift = START_LIFT
@@ -625,6 +666,10 @@ export function PaperNotes({
       if (!motion.landed) {
         motion.landed = true
         splat(plan.force)
+        if (burnsHere()) {
+          const point = project(body, viewportRef.current)
+          spawnEmbers(point.x, point.y, ball * plan.force)
+        }
       }
       body.opacity = 1
       const bounce = (elapsed - DROP_FALL_DURATION) / DROP_BOUNCE_DURATION
@@ -834,13 +879,15 @@ export function PaperNotes({
     const dt = lastFrame.current ? Math.min(48, Math.max(0, now - lastFrame.current)) : 16
     lastFrame.current = now
     let moving = false
+    const burning = burnsHere()
     for (const body of Array.from(bodies.current.values())) {
       if (body.motion) advance(body, now, dt)
       render(body, now)
-      if (body.motion || now - body.splatAt < 320) moving = true
+      if (body.motion || now - body.splatAt < 320 || (burning && now - body.fireFrom < FIRE_LIFE)) moving = true
     }
     if (dissolve.current && !dissolve.current.done) {
-      dissolve.current.done = applyDissolve(dissolve.current, now, viewportRef.current)
+      const { burn } = dissolve.current
+      dissolve.current.done = burn ? burn.frame(now, viewportRef.current) : applyDissolve(dissolve.current, now, viewportRef.current)
       if (!dissolve.current.done) moving = true
     }
     const anyDrop = Array.from(bodies.current.values()).some((body) => body.motion?.kind === 'drop')
@@ -865,7 +912,10 @@ export function PaperNotes({
     cancelAnimationFrame(frameRequest.current)
     frameRequest.current = 0
     lastFrame.current = 0
-    if (dissolve.current) clearDissolve(dissolve.current.layers)
+    if (dissolve.current) {
+      dissolve.current.burn?.dispose()
+      clearDissolve(dissolve.current.layers)
+    }
     clearTimeout(gesture.current?.timer)
     gesture.current = null
     setCursorMode('pointer')
@@ -920,12 +970,25 @@ export function PaperNotes({
           }
         }
         const lastImpact = Math.max(...patches.map((patch) => patch.start))
+        const sweepStart = Math.max(120, lastImpact - DROP_BOUNCE_DURATION * 0.5)
+        const burn = burnsHere()
+          ? createPaperBurn({
+            layers,
+            canvas: burnCanvas.current,
+            spots: patches.map((patch) => ({ ...patch, shape: burnShape(random) })),
+            origin: arrival,
+            sweepStart,
+            sweepDuration: BURN_SWEEP,
+            random,
+          })
+          : null
         dissolve.current = {
           layers,
           patches,
           origin: arrival,
-          sweepStart: Math.max(120, lastImpact - DROP_BOUNCE_DURATION * 0.5),
+          sweepStart,
           done: false,
+          burn,
         }
       }
       // Place every ball before the first paint so nothing flashes at rest.
@@ -1153,6 +1216,14 @@ export function PaperNotes({
     for (const body of bodies.current.values()) render(body, performance.now())
   }, [layout?.ball, render])
 
+  // A theme picked in another tab repaints the paper in its colours.
+  useLayoutEffect(() => {
+    if (paintedTheme.current === theme) return
+    paintedTheme.current = theme
+    for (const parts of elements.current.values()) parts.drawnRotation = null
+    for (const body of bodies.current.values()) render(body, performance.now())
+  }, [theme, render])
+
   const handleEscape = useEffectEvent((event: KeyboardEvent) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     const drag = gesture.current
@@ -1234,6 +1305,7 @@ export function PaperNotes({
       drawnRotation: null,
       drawnSize: 0,
       moving: false,
+      fire: 0,
     })
     const ball = bodies.current.get(id)
     if (ball) render(ball, performance.now())
@@ -1746,10 +1818,11 @@ export function PaperNotes({
         '--cluster-middle': `${middle}px`,
       } as CSSProperties}
     >
+      {theme === 'dismantle' && <canvas ref={burnCanvas} className="paper-burn" aria-hidden="true" />}
       <header className="paper-notes-heading">
-        <p className="eyebrow"><span /> WORDS TO LIVE BY.</p>
-        <h1><span>Notes to</span> <em>self</em></h1>
-        <p className="paper-notes-subtitle">Principles, goals and quotes worth keeping close.</p>
+        <p className="eyebrow"><span /> {themeDefinition(theme).copy.notesEyebrow}</p>
+        <h1><span>{themeDefinition(theme).copy.notesTitleLead}</span> <em>self</em></h1>
+        <p className="paper-notes-subtitle">{themeDefinition(theme).copy.notesSubtitle}</p>
       </header>
 
       <PaperCategories filter={filter} counts={counts} onChange={chooseFilter} />
@@ -1829,7 +1902,7 @@ export function PaperNotes({
         </div>
         <div className="paper-notes-signoff">
           <span className="saved-label"><Check size={12} /> {storageLabel}</span>
-          <p>Keep what keeps you going.</p>
+          <p>{themeDefinition(theme).copy.notesSignoff}</p>
         </div>
       </footer>
 
@@ -1922,9 +1995,11 @@ function PaperBall({
       >
         <span className="paper-ball-shadow" aria-hidden="true"><span /></span>
         <span className="paper-ball-body">
+          <span className="paper-ball-fire is-back" aria-hidden="true" />
           <span className="paper-ball-lift">
             <canvas aria-hidden="true" />
           </span>
+          <span className="paper-ball-fire is-front" aria-hidden="true" />
         </span>
         <span className="paper-ball-label" aria-hidden="true">
           <small>{blank ? 'NEW' : PAPER_NOTE_KIND_LABELS[note.kind].toUpperCase()}</small>
@@ -2015,7 +2090,7 @@ function PaperSheet({ note, origin, isNew, storageLabel, returnTarget, onChange,
       unfold: pose.unfold,
       rotation: rotation.current,
     }, frame)
-    paintPaperFrame(paper, mesh, frame, pose.unfold)
+    paintPaperFrame(paper, mesh, frame, pose.unfold, currentPaperInk())
 
     const lifted = pose.height
     context.save()

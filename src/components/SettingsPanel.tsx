@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { FLASH_REMINDER_MESSAGE } from '../lib/flashReminder'
 import {
+  DEFAULT_TITLE,
   MAX_HABITS,
   MAX_HABIT_NAME_LENGTH,
   MAX_REMINDERS,
@@ -17,6 +18,9 @@ import {
   updateHabitPlan,
 } from '../lib/tracker'
 import type { Habit, Month, TrackerState } from '../lib/tracker'
+import { useTheme } from '../hooks/useTheme'
+import { presentTitle, storedTitle } from '../lib/theme'
+import { ThemePicker } from './ThemePicker'
 
 interface SettingsPanelProps {
   state: TrackerState
@@ -25,8 +29,6 @@ interface SettingsPanelProps {
   onClose: () => void
   onStateChange: Dispatch<SetStateAction<TrackerState>>
 }
-
-const DEFAULT_TITLE = 'No Excuses Grind'
 
 const monthFormatter = new Intl.DateTimeFormat('en', {
   month: 'long',
@@ -75,9 +77,13 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const currentMonth = monthFromDate(today)
   const firstMonth = monthFromKey(state.startedOn)
+  const theme = useTheme()
   const [selectedMonth, setSelectedMonth] = useState<Month>(currentMonth)
   const initialHabits = editableHabits(state, currentMonth)
   const [title, setTitle] = useState(state.title || DEFAULT_TITLE)
+  // The stock title is shown in the theme's words until someone types here;
+  // after that the field shows exactly what was typed.
+  const [titleTyped, setTitleTyped] = useState(false)
   const [showTitle, setShowTitle] = useState(Boolean(state.title))
   const [habits, setHabits] = useState<Habit[]>(initialHabits)
   const [newHabit, setNewHabit] = useState('')
@@ -119,7 +125,7 @@ export function SettingsPanel({
   }, [])
 
   function commitTitle(nextTitle: string) {
-    const normalized = nextTitle.trim()
+    const normalized = storedTitle(nextTitle, theme)
     if (!normalized) return
     committedTitle.current = normalized
     onStateChange((previous) => {
@@ -284,7 +290,7 @@ export function SettingsPanel({
         <div>
           <p className="eyebrow">A SPACE THAT&apos;S YOURS</p>
           <h2 id="settings-heading">Make it <em>personal.</em></h2>
-          <p id="settings-description">Choose a month. Your changes save as you go.</p>
+          <p id="settings-description">Pick a look, choose a month. Your changes save as you go.</p>
         </div>
         <button type="button" className="icon-button modal-close" aria-label="Close settings" onClick={onClose}>
           <X size={19} strokeWidth={1.5} />
@@ -298,6 +304,8 @@ export function SettingsPanel({
         }}
       >
         <div className="settings-body" data-scrollable>
+          <ThemePicker />
+
           <section className="settings-section settings-month-section" aria-labelledby="routine-month-heading">
             <div className="settings-month-picker">
               <button
@@ -343,22 +351,26 @@ export function SettingsPanel({
             <input
               id="routine-title"
               className="title-input"
-              value={title}
+              value={titleTyped ? title : presentTitle(title, theme)}
               disabled={!showTitle}
               maxLength={MAX_TITLE_LENGTH}
               onChange={(event) => {
                 const nextTitle = event.target.value
                 setTitle(nextTitle)
+                setTitleTyped(true)
                 setError('')
                 commitTitle(nextTitle)
               }}
               onBlur={() => {
                 if (!title.trim()) {
                   setTitle(committedTitle.current)
+                  setTitleTyped(false)
                   setError('Your reminder needs a few words. The last saved title was restored.')
                   return
                 }
-                setTitle(title.trim())
+                // Settle on what was saved, so a later theme change shows it in the right words.
+                setTitle(committedTitle.current)
+                setTitleTyped(false)
               }}
             />
             <p className="field-help">Your mantra, or nothing at all. A little white space is good, too.</p>

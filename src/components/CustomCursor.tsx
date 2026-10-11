@@ -3,9 +3,13 @@ import { createPortal } from 'react-dom'
 import {
   createCursorMorph,
   CROSS_CURSOR_PATH,
+  CROSS_CURSOR_SHAPE,
+  CURSOR_HOTSPOT,
   CURSOR_MODE_SHAPES,
   CURSOR_MORPH_DURATION,
   CURSOR_SHAPE_MORPH_DURATION,
+  CURSOR_TOOL_DETAILS,
+  CURSOR_TOOL_MODES,
   cursorMorphPath,
   cursorMorphProgress,
   cursorMorphShape,
@@ -14,7 +18,8 @@ import {
   TRIANGLE_CURSOR_PATH,
 } from '../lib/cursorMorph'
 import type { CursorMode, CursorShape } from '../lib/cursorMorph'
-import { getCursorMode, subscribeCursorMode } from '../lib/cursorMode'
+import { getCursorGuide, getCursorMode, subscribeCursorGuide, subscribeCursorMode } from '../lib/cursorMode'
+import type { CursorGuide } from '../lib/cursorMode'
 
 export interface CursorFeedback {
   x: number
@@ -39,6 +44,29 @@ const MODE_POPS: Partial<Record<CursorMode, Keyframe[]>> = {
     { transform: 'rotate(12deg) scale(1.12)', offset: 0.62 },
     { transform: 'rotate(0deg) scale(1)' },
   ],
+  // Tools settle onto their working end, like a pencil set down on its point.
+  pencil: [
+    { transform: 'scale(0.84)' },
+    { transform: 'scale(1.07)', offset: 0.55 },
+    { transform: 'scale(1)' },
+  ],
+  eraser: [
+    { transform: 'rotate(-10deg) scale(0.9)' },
+    { transform: 'rotate(3deg) scale(1.06)', offset: 0.55 },
+    { transform: 'rotate(0deg) scale(1)' },
+  ],
+}
+
+const TOOLS = ['pencil', 'eraser'] as const
+
+// The cursor glides onto a guide's path quickly, and back to the pointer a little more gently.
+const GUIDE_CATCH = 120
+const GUIDE_RETURN = 240
+
+const HOLDING_MODES: ReadonlySet<CursorMode> = new Set(['grab', 'switch'])
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 export function CustomCursor({ rejection }: { rejection: CursorRejection | null }) {
@@ -51,20 +79,36 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
   // The outline currently on screen, so any morph can start from wherever the last one stopped.
   const displayed = useRef<CursorShape>(CURSOR_MODE_SHAPES.pointer)
   const stopRejection = useRef<(() => void) | null>(null)
+  const stopModeMorph = useRef<(() => void) | null>(null)
+  // Where the pointer really is; a guide may be holding the cursor somewhere else.
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  const follow = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (!rejection) return
     const useCursor = rejection.followPointer &&
       window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    const mode = getCursorMode()
     // A cursor that is holding something keeps its shape.
-    if (useCursor && getCursorMode() !== 'pointer') return
+    if (useCursor && HOLDING_MODES.has(mode)) return
     const element = useCursor ? cursor.current : cellFeedback.current
     const shape = useCursor ? cursorShape.current : cellShape.current
     if (!element || !shape) return
+    // A pencil or eraser says no the way the pointer does: it turns into the
+    // cross for a moment and comes back as itself.
+    const base = useCursor ? CURSOR_MODE_SHAPES[mode] : CURSOR_MODE_SHAPES.pointer
+    const toCross = useCursor && mode !== 'pointer' ? createCursorMorph(base, CROSS_CURSOR_SHAPE) : null
+    const shapeAt = (progress: number) => (toCross ? toCross(progress) : cursorMorphShape(progress))
+    const pathAt = (progress: number) => (toCross ? cursorShapePath(toCross(progress)) : cursorMorphPath(progress))
+    const basePath = toCross ? cursorShapePath(base) : TRIANGLE_CURSOR_PATH
 
     if (useCursor) {
+      // The rejection takes the outline over from any change of tool still under way.
+      stopModeMorph.current?.()
+      displayed.current = base
       document.documentElement.classList.add('custom-cursor-ready')
-      element.style.transform = `translate3d(${rejection.x - 3}px, ${rejection.y - 3}px, 0)`
+      pointer.current = { x: rejection.x, y: rejection.y }
+      follow.current()
       element.dataset.visible = 'true'
       element.dataset.blocked = 'true'
     } else {
@@ -85,9 +129,9 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
 
     function finish() {
       morphProgress.current = 0
-      shape?.setAttribute('d', TRIANGLE_CURSOR_PATH)
+      shape?.setAttribute('d', basePath)
       if (useCursor) {
-        displayed.current = CURSOR_MODE_SHAPES.pointer
+        displayed.current = base
         stopRejection.current = null
       }
       if (useCursor && element) delete element.dataset.blocked
@@ -103,21 +147,21 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
       const progress = cursorMorphProgress(elapsed, from)
       if (useCursor) {
         morphProgress.current = progress
-        displayed.current = cursorMorphShape(progress)
+        displayed.current = shapeAt(progress)
       }
-      shape?.setAttribute('d', cursorMorphPath(progress))
+      shape?.setAttribute('d', pathAt(progress))
       frame = requestAnimationFrame(animate)
     }
 
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      shape.setAttribute('d', CROSS_CURSOR_PATH)
+    if (prefersReducedMotion()) {
+      shape.setAttribute('d', toCross ? pathAt(1) : CROSS_CURSOR_PATH)
       if (useCursor) {
         morphProgress.current = 1
-        displayed.current = cursorMorphShape(1)
+        displayed.current = shapeAt(1)
       }
       timeout = setTimeout(finish, CURSOR_MORPH_DURATION)
     } else {
-      shape.setAttribute('d', cursorMorphPath(from))
+      shape.setAttribute('d', pathAt(from))
       frame = requestAnimationFrame(animate)
     }
 
@@ -144,8 +188,9 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
   }, [rejection])
 
   // Picking something up turns the pointer into a hand; hovering a place to
-  // swap with turns the hand into arrows. Each morph starts from the outline
-  // on screen, so a quick change of mind never jumps.
+  // swap with turns the hand into arrows; the task list hands over a pencil,
+  // or an eraser over what is already crossed out. Each morph starts from the
+  // outline on screen, so a quick change of mind never jumps.
   useEffect(() => {
     let frame = 0
 
@@ -156,14 +201,17 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
       cancelAnimationFrame(frame)
       frame = 0
       stopRejection.current?.()
+      const previous = element.dataset.mode as CursorMode | undefined
       element.dataset.mode = mode
       const target = CURSOR_MODE_SHAPES[mode]
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (prefersReducedMotion()) {
         displayed.current = target
         shape.setAttribute('d', cursorShapePath(target))
         return
       }
-      const morph = createCursorMorph(displayed.current, target)
+      // A tool leans the other way from the arrow, so it swings round its point into place.
+      const swing = CURSOR_TOOL_MODES.has(mode) || (previous !== undefined && CURSOR_TOOL_MODES.has(previous))
+      const morph = createCursorMorph(displayed.current, target, swing ? { pivot: CURSOR_HOTSPOT } : undefined)
       const start = performance.now()
       const pop = MODE_POPS[mode]
       if (pop) cursorPose.current?.animate(pop, { duration: 380, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)' })
@@ -177,15 +225,91 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
     }
 
     const unsubscribe = subscribeCursorMode(morphTo)
+    stopModeMorph.current = () => {
+      cancelAnimationFrame(frame)
+      frame = 0
+    }
     if (getCursorMode() !== 'pointer') morphTo(getCursorMode())
     return () => {
       unsubscribe()
       cancelAnimationFrame(frame)
+      stopModeMorph.current = null
     }
   }, [])
 
   useEffect(() => {
     const media = window.matchMedia('(hover: hover) and (pointer: fine)')
+    let frame = 0
+    // The guide being followed, or 0 while the cursor follows the pointer.
+    let owner = 0
+    let shown: CursorGuide | null = null
+    let glide: { from: CursorGuide; start: number; duration: number } | null = null
+
+    function goal(): CursorGuide | null {
+      const guide = owner ? getCursorGuide() : null
+      if (guide) return guide
+      return pointer.current ? { ...pointer.current, tilt: 0 } : null
+    }
+
+    function place(pose: CursorGuide) {
+      const element = cursor.current
+      if (!element) return
+      shown = pose
+      const tilt = Math.abs(pose.tilt) > 0.01 ? ` rotate(${pose.tilt.toFixed(2)}deg)` : ''
+      element.style.transform = `translate3d(${pose.x - 3}px, ${pose.y - 3}px, 0)${tilt}`
+    }
+
+    function render(now: number) {
+      frame = 0
+      const target = goal()
+      if (!target) return
+      if (!glide) {
+        place(target)
+        return
+      }
+      const t = Math.min(1, Math.max(0, (now - glide.start) / glide.duration))
+      const eased = 1 - (1 - t) ** 3
+      place({
+        x: glide.from.x + (target.x - glide.from.x) * eased,
+        y: glide.from.y + (target.y - glide.from.y) * eased,
+        tilt: glide.from.tilt + (target.tilt - glide.from.tilt) * eased,
+      })
+      if (t < 1) frame = requestAnimationFrame(render)
+      else glide = null
+    }
+
+    function startGlide(duration: number) {
+      glide = shown && !prefersReducedMotion() ? { from: shown, start: performance.now(), duration } : null
+      cancelAnimationFrame(frame)
+      frame = 0
+      render(performance.now())
+    }
+
+    // While a guide holds the cursor or it is gliding home, the pointer only
+    // moves the place it will glide back to.
+    follow.current = () => {
+      if (owner || glide) {
+        if (!frame && glide) frame = requestAnimationFrame(render)
+        return
+      }
+      const target = goal()
+      if (target) place(target)
+    }
+
+    function guided(guide: CursorGuide | null, claim: number) {
+      if (guide) {
+        if (claim !== owner) {
+          owner = claim
+          startGlide(GUIDE_CATCH)
+        } else if (!glide) {
+          place(guide)
+        }
+      } else if (owner) {
+        // Only the newest guide can let go, so nothing is guiding the cursor any more.
+        owner = 0
+        startGlide(GUIDE_RETURN)
+      }
+    }
 
     function move(event: PointerEvent) {
       const element = cursor.current
@@ -198,7 +322,8 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
       const interactive = Boolean(interactiveElement && interactiveElement.getAttribute('aria-disabled') !== 'true')
 
       document.documentElement.classList.add('custom-cursor-ready')
-      element.style.transform = `translate3d(${event.clientX - 3}px, ${event.clientY - 3}px, 0)`
+      pointer.current = { x: event.clientX, y: event.clientY }
+      follow.current()
       element.dataset.visible = String(!overInput)
       element.dataset.interactive = String(interactive)
     }
@@ -219,6 +344,7 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
       if (cursor.current) cursor.current.dataset.pressed = 'false'
     }
 
+    const unsubscribe = subscribeCursorGuide(guided)
     window.addEventListener('pointermove', move, { passive: true })
     window.addEventListener('pointerdown', down, { passive: true })
     window.addEventListener('pointerup', up, { passive: true })
@@ -227,6 +353,9 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
     document.addEventListener('pointerout', leave)
 
     return () => {
+      unsubscribe()
+      cancelAnimationFrame(frame)
+      follow.current = () => {}
       document.documentElement.classList.remove('custom-cursor-ready')
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerdown', down)
@@ -251,6 +380,16 @@ export function CustomCursor({ rejection }: { rejection: CursorRejection | null 
               strokeWidth="1.4"
               strokeLinejoin="round"
             />
+            {TOOLS.map((tool) => {
+              const { fill, lines, marks } = CURSOR_TOOL_DETAILS[tool]
+              return (
+                <g key={tool} className={`cursor-detail cursor-detail-${tool}`}>
+                  <path d={fill} fill="#202020" />
+                  {lines && <path d={lines} fill="none" stroke="#202020" strokeWidth="1.05" strokeLinecap="round" />}
+                  {marks && <path d={marks} fill="none" stroke="white" strokeWidth="1" strokeLinecap="round" />}
+                </g>
+              )
+            })}
           </g>
         </svg>
       </div>

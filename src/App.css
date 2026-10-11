@@ -1955,7 +1955,8 @@ svg .sweep-item {
 .settings-body > section:nth-of-type(3) { animation-delay: 210ms; }
 .settings-body > section:nth-of-type(4) { animation-delay: 280ms; }
 .settings-body > section:nth-of-type(5) { animation-delay: 350ms; }
-.settings-footer { animation-delay: 400ms; }
+.settings-body > section:nth-of-type(6) { animation-delay: 410ms; }
+.settings-footer { animation-delay: 450ms; }
 .social-tabs { animation-delay: 80ms; }
 .people-toolbar { animation-delay: 80ms; }
 .social-body > section { animation-delay: 160ms; }
@@ -2000,6 +2001,7 @@ svg .sweep-item {
   height: 31px;
   opacity: 0;
   pointer-events: none;
+  transform-origin: 3px 3px;
   will-change: transform;
 }
 
@@ -2032,8 +2034,33 @@ svg .sweep-item {
   transform: none;
 }
 
+/* A pencil or eraser pressed down gives a little, towards its working end. */
+.custom-cursor[data-mode='pencil'][data-pressed='true'] > svg,
+.custom-cursor[data-mode='eraser'][data-pressed='true'] > svg {
+  transform: scale(0.88);
+}
+
 .cursor-pose {
   transform-origin: 3px 3px;
+}
+
+/* The pencil's and eraser's inked details wait for the outline to land, and
+   leave at once when it starts to change again. */
+.cursor-detail {
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+
+.custom-cursor[data-mode='pencil']:not([data-blocked='true']) .cursor-detail-pencil,
+.custom-cursor[data-mode='eraser']:not([data-blocked='true']) .cursor-detail-eraser {
+  opacity: 1;
+  transition: opacity 150ms ease 140ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-detail {
+    transition-delay: 0s !important;
+  }
 }
 
 .blocked-cell-feedback {
@@ -2172,6 +2199,130 @@ svg .sweep-item {
   line-height: 1.55;
   text-align: center;
   color: #929292;
+}
+
+.theme-section {
+  padding-top: 2px;
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.theme-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 34px 9px 9px;
+  border: 1px solid #e2e2e2;
+  border-radius: 15px;
+  background: white;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    box-shadow 240ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.theme-option:hover {
+  border-color: #b9b9b9;
+  transform: translateY(-1px);
+}
+
+.theme-option:active {
+  transform: scale(0.985);
+}
+
+.theme-option.is-selected {
+  border-color: #282828;
+  box-shadow: 0 8px 22px #0000000d;
+}
+
+.theme-option:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.theme-option-art {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  overflow: visible;
+}
+
+.theme-option-paper {
+  stroke: #00000012;
+  stroke-width: 1px;
+}
+
+.theme-option-copy {
+  min-width: 0;
+}
+
+.theme-option-copy > strong,
+.theme-option-copy > small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-option-copy > strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.theme-option-copy > small {
+  margin-top: 3px;
+  font-size: 9px;
+  color: #929292;
+}
+
+.theme-option-check {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #282828;
+  color: white;
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 160ms ease,
+    transform 320ms cubic-bezier(0.3, 1.6, 0.4, 1);
+}
+
+.theme-option.is-selected .theme-option-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* A little watercolour berry peeks over the strawberry swatch. */
+.theme-option-sticker {
+  position: absolute;
+  top: -11px;
+  right: 30px;
+  width: 21px;
+  height: auto;
+  pointer-events: none;
+  transform: rotate(16deg);
+  transform-origin: 50% 80%;
+  filter: drop-shadow(0 2px 2px #8c2c4a24);
+  transition: transform 360ms cubic-bezier(0.3, 1.5, 0.4, 1);
+}
+
+.theme-option-strawberry:hover .theme-option-sticker,
+.theme-option-strawberry.is-selected .theme-option-sticker {
+  transform: rotate(-6deg) translateY(-2px) scale(1.08);
 }
 
 .section-heading {

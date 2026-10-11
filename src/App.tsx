@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 're
 import { ArrowLeft, ArrowUpRight, Check, Eye, LoaderCircle, Plus, SlidersHorizontal, UserRound, UsersRound } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import peekArt from './assets/anri/peek.webp'
+import dismantlePeekArt from './assets/dismantle/anri-peek.webp'
 import { AccountLoadingScreen } from './components/AccountLoadingScreen'
 import { AccountPanel } from './components/AccountPanel'
 import { AnriIcon } from './components/AnriIcon'
@@ -22,6 +23,10 @@ import { TodayTasks } from './components/TodayTasks'
 import { useDailyVisits } from './hooks/useDailyVisits'
 import { useNotesState } from './hooks/useNotesState'
 import { useTrackerState } from './hooks/useTrackerState'
+import { StrawberryDesk } from './components/StrawberryDesk'
+import { DismantleBackdrop } from './components/DismantleBackdrop'
+import { useTheme } from './hooks/useTheme'
+import { presentTitle, themeDefinition } from './lib/theme'
 import { taskDateFor, taskDateKey, TODAY_TASKS_ID } from './lib/dayTasks'
 import type { TaskDate } from './lib/dayTasks'
 import { FLASH_REMINDER_MESSAGE, pickReminder } from './lib/flashReminder'
@@ -95,6 +100,8 @@ function App() {
     unfollowUser,
   } = useTrackerState()
   const [today, setToday] = useState(() => new Date())
+  const theme = useTheme()
+  const copy = themeDefinition(theme).copy
   const { dailyVisits, recordDailyVisit } = useDailyVisits(today)
   const {
     dailyNotes,
@@ -151,7 +158,10 @@ function App() {
   const workspace = useRef<HTMLElement>(null)
   const heading = useRef<HTMLDivElement>(null)
   const displayState = viewedProfile?.tracker ?? state
-  const displayTitle = displayState.title.trim() || (viewedProfile ? `${viewedProfile.username}'s practice` : '')
+  // The theme only re-voices the stock title of your own practice; other
+  // people's titles are always shown exactly as they are.
+  const ownTitle = viewedProfile ? displayState.title.trim() : presentTitle(displayState.title.trim(), theme)
+  const displayTitle = ownTitle || (viewedProfile ? `${viewedProfile.username}'s practice` : '')
   const viewedProfileIsFollowing = Boolean(account && viewedProfile?.isFollowing)
   const habits = getHabitsForMonth(displayState, month)
   const dense = habits.length >= 7
@@ -451,7 +461,7 @@ function App() {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
       // The control catches the guide as it folds into the corner.
       trigger.querySelector('.onboarding-trigger-face')?.animate([
-        { transform: 'scale(1.5)', color: '#202020', borderColor: '#202020', background: 'white' },
+        { transform: 'scale(1.5)', color: 'var(--ink)', borderColor: 'var(--ink)', background: 'white' },
         { transform: 'scale(0.86)', offset: 0.4 },
         { transform: 'scale(1.08)', offset: 0.7 },
         { transform: 'scale(1)' },
@@ -519,11 +529,12 @@ function App() {
 
   if (!authReady || !notesReady) return <AccountLoadingScreen />
 
+  const dayNoteLines = isCurrentMonth ? copy.todayLines : copy.otherLines
   const dayNoteContent = (
     <>
-      <span className="day-note-heading"><span />{isCurrentMonth ? 'TODAY IS A GOOD DAY' : 'ONE DAY AT A TIME'}</span>
+      <span className="day-note-heading"><span />{isCurrentMonth ? copy.todayHeading : copy.otherHeading}</span>
       <span className="day-counter">{isCurrentMonth ? String(today.getDate()).padStart(2, '0') : String(daysInMonth(month)).padStart(2, '0')}<span> / {daysInMonth(month)}</span></span>
-      <span className="day-note-copy">{isCurrentMonth ? <>A small step today.<br />A different you tomorrow.</> : <>A little intention.<br />A whole lot of possibility.</>}</span>
+      <span className="day-note-copy">{dayNoteLines[0]}<br />{dayNoteLines[1]}</span>
       <span className="day-note-line" />
     </>
   )
@@ -548,6 +559,8 @@ function App() {
       >
         <div className="ambient-grid" aria-hidden="true" />
         <div className="page-grain" aria-hidden="true" />
+        {theme === 'strawberry' && <StrawberryDesk />}
+        {theme === 'dismantle' && <DismantleBackdrop />}
         <header className="page-header">
           <div className="header-left">
             <Brand onHome={() => {
@@ -638,12 +651,12 @@ function App() {
                   )}
                 </div>
               )}
-              <p className="eyebrow"><span /> {viewedProfile ? 'A PRACTICE IN YOUR CIRCLE.' : 'A LITTLE BETTER, EVERY DAY.'}</p>
+              <p className="eyebrow"><span /> {viewedProfile ? 'A PRACTICE IN YOUR CIRCLE.' : copy.eyebrow}</p>
               <h1>
                 {titleWords.length > 0 && <span>{titleWords.join(' ')} </span>}
-                <em>{titleLastWord}</em>
+                <em data-text={titleLastWord}>{titleLastWord}</em>
               </h1>
-              <p className="hero-subtitle">{viewedProfile ? `A month in @${viewedProfile.username}'s rhythm.` : 'Less thinking. More showing up.'}</p>
+              <p className="hero-subtitle">{viewedProfile ? `A month in @${viewedProfile.username}'s rhythm.` : copy.subtitle}</p>
               {relationshipError && <p className="profile-relationship-error" role="alert">{relationshipError}</p>}
             </div>
           )}
@@ -679,6 +692,7 @@ function App() {
                   taskDay={tasksShown && !viewedProfile && monthKey(tasksDate.month) === monthKey(month) ? tasksDate.day : null}
                   taskDayLeaving={tasksPhase === 'leaving'}
                   onTaskDayPick={tasksPhase === 'open' && !viewedProfile ? showTasksFor : undefined}
+                  sweepingOut={phase === 'out' || switchPhase === 'out'}
                 />
               </div>
             )}
@@ -686,8 +700,8 @@ function App() {
 
           <aside className="intention-note sweep-item" style={sweep(TEXT_SWEEP.intentionNote)} aria-hidden="true">
             <span className="small-cross">+</span>
-            <p>Not perfect.<br /><em>Just consistent.</em></p>
-            <span className="note-caption">THAT&apos;S THE WHOLE IDEA.</span>
+            <p>{copy.intentionLead}<br /><em>{copy.intentionEmphasis}</em></p>
+            <span className="note-caption">{copy.intentionCaption}</span>
           </aside>
           <aside
             className={`day-note sweep-item ${lockReminderVisible ? 'is-hidden' : ''} ${dateNoteOpen ? 'is-date-note-open' : ''} ${tasksShown ? 'is-tasks-open' : ''}`}
@@ -707,7 +721,7 @@ function App() {
                 aria-controls={tasksShown ? TODAY_TASKS_ID : undefined}
               >
                 {dayNoteContent}
-                <span className="day-note-hint" aria-hidden="true">SEE TODAY&apos;S TASKS</span>
+                <span className="day-note-hint" aria-hidden="true">{copy.dayNoteHint}</span>
               </button>
             )}
           </aside>
@@ -812,11 +826,11 @@ function App() {
         <footer className="page-footer">
           <div className="footer-guide sweep-item" style={sweep(TEXT_SWEEP.footerGuide)}>
             <div className="legend" aria-label="Cell legend">
-              <span><i className="legend-done" /> Done</span>
-              <span><i className="legend-undone" /> Not yet</span>
-              <span><i className="legend-unavailable" /> Not available</span>
+              <span><i className="legend-done" /> {copy.legendDone}</span>
+              <span><i className="legend-undone" /> {copy.legendUndone}</span>
+              <span><i className="legend-unavailable" /> {copy.legendUnavailable}</span>
             </div>
-            <p>{viewedProfile ? `Viewing @${viewedProfile.username}'s shared check-ins.` : 'Click a cell. Keep a promise.'}</p>
+            <p>{viewedProfile ? `Viewing @${viewedProfile.username}'s shared check-ins.` : copy.footerGuide}</p>
           </div>
           <div className="month-nav-slot sweep-item" style={sweep(TEXT_SWEEP.monthNavigation)}>
             <MonthPicker month={month} today={today} onChange={setMonth} />
@@ -833,7 +847,7 @@ function App() {
             ) : (
               <span className={`saved-label sync-${syncStatus}`}><Check size={12} /> {syncLabel}</span>
             )}
-            <p>Little by little, a little becomes a lot.</p>
+            <p>{copy.footerSignoff}</p>
           </div>
         </footer>
         </div>
@@ -866,7 +880,7 @@ function App() {
           aria-label="Replay the welcome guide"
         >
           <span className="onboarding-trigger-hint" aria-hidden="true">
-            <img className="onboarding-trigger-peek" src={peekArt} alt="" draggable={false} decoding="async" />
+            <img className="onboarding-trigger-peek" src={theme === 'dismantle' ? dismantlePeekArt : peekArt} alt="" draggable={false} decoding="async" />
             <span className="onboarding-trigger-note">Replay the guide</span>
           </span>
           <span className="onboarding-trigger-face">

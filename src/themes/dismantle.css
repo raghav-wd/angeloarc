@@ -1,0 +1,2169 @@
+/*
+  Dismantle — a dark, bloody take on ANGELO, after the King of Curses' cutting
+  technique.
+
+  The page is Anri's domain: old cuts across the dark that glow now and then,
+  a shrine under a blood moon, and Anri herself with her hands in the sign.
+  Kept promises are fresh blood; the wheel is cut to pieces as it sweeps away;
+  today's list is slashed rather than scribbled; and notes to self drop in as
+  fireballs that burn the page away. Everything is scoped to
+  <html data-theme="dismantle">, so the other themes are untouched.
+*/
+
+/* Black, with a dark blood-red grid. */
+:root[data-theme='dismantle'] {
+  color-scheme: dark;
+  --dm-void: #000000;
+  --dm-bg: #000000;
+  --dm-surface: #100b0c;
+  --dm-surface-2: #181012;
+  --dm-surface-3: #22171a;
+  --dm-line: #2a1b1e;
+  --dm-line-strong: #46282d;
+  --dm-blood: #c3121f;
+  --dm-blood-bright: #ec2f3c;
+  --dm-blood-deep: #7e0a13;
+  --dm-glow: #ff3341;
+  --dm-ember: #ff7a3d;
+  --dm-ink: #efe6e4;
+  --dm-ink-soft: #cfbfbd;
+  --dm-muted: #977f80;
+  --dm-faint: #6b5a5c;
+  --dm-bone: #e9dfd4;
+  --dm-sumi: #2a0d10;
+
+  --ink: var(--dm-ink);
+  --muted: var(--dm-muted);
+  --line: var(--dm-line);
+  --paper: var(--dm-bg);
+  color: var(--dm-ink);
+  background: var(--dm-bg);
+}
+
+[data-theme='dismantle'] ::selection {
+  color: white;
+  background: var(--dm-blood);
+}
+
+[data-theme='dismantle'] input::placeholder,
+[data-theme='dismantle'] textarea::placeholder {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] button:focus-visible,
+[data-theme='dismantle'] input:focus-visible,
+[data-theme='dismantle'] [tabindex]:focus-visible {
+  outline-color: var(--dm-blood-bright);
+}
+
+/* ——— The page: black, ruled in dried blood ——— */
+
+[data-theme='dismantle'] .ambient-grid {
+  background-image:
+    linear-gradient(#7a0d17 1px, transparent 1px),
+    linear-gradient(90deg, #7a0d17 1px, transparent 1px);
+  opacity: 0.26;
+}
+
+[data-theme='dismantle'] .page-grain {
+  background:
+    radial-gradient(ellipse at 50% 50%, #000000d9 6%, transparent 46%),
+    linear-gradient(180deg, #000 0%, transparent 16%, transparent 86%, #000 100%);
+}
+
+/* ——— Anri's domain ——— */
+
+.dismantle-backdrop {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.domain-aura,
+.domain-aura-flare,
+.domain-scars,
+.domain-fresh-cuts {
+  position: absolute;
+  inset: 0;
+}
+
+.domain-aura {
+  background: radial-gradient(circle at 50% 53%, #4a07101c 0%, #2a040912 26%, transparent 52%);
+  animation: domain-aura-breathe 9s ease-in-out infinite;
+}
+
+/* A breath of red behind Anri as she steps out. */
+.domain-aura-flare {
+  opacity: 0;
+  background: radial-gradient(ellipse 24% 36% at 14% 30%, #ff1f2f1f 0%, #7e0a1312 45%, transparent 72%);
+}
+
+.is-panel-open .domain-aura-flare {
+  animation: domain-expand 2.8s ease-out 120ms both;
+}
+
+@keyframes domain-aura-breathe {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes domain-expand {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+
+/* Old cuts: barely there, until one catches the light for a moment. */
+.domain-scar {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(var(--shift));
+}
+
+.domain-scar > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.domain-scar-mark {
+  fill: #8c0f1a1f;
+}
+
+.domain-scar-glow {
+  fill: #c8121f;
+  opacity: 0;
+  filter: drop-shadow(0 0 2px #ff1f2f59);
+  animation: domain-scar-glow var(--period, 18s) ease-in-out var(--delay, 0s) infinite;
+}
+
+@keyframes domain-scar-glow {
+  0%, 86%, 100% { opacity: 0; }
+  90% { opacity: 0.3; }
+  93% { opacity: 0.1; }
+  95.5% { opacity: 0.18; }
+  98% { opacity: 0.03; }
+}
+
+/* A fresh cut: drawn in a blink, then cooling to a scar and gone. */
+.domain-scar.is-fresh > svg {
+  transform-origin: 0 50%;
+  animation: domain-cut-draw 7s cubic-bezier(0.1, 0.9, 0.2, 1) both;
+}
+
+.domain-scar.is-fresh .domain-scar-glow {
+  animation: domain-cut-glow 7s ease-out both;
+}
+
+.domain-scar.is-fresh .domain-scar-mark {
+  animation: domain-cut-scar 7s ease-in both;
+}
+
+@keyframes domain-cut-draw {
+  0% { transform: scaleX(0) scaleY(1.6); }
+  2.4% { transform: scaleX(1) scaleY(1.2); }
+  8% { transform: scaleX(1) scaleY(1); }
+  100% { transform: scaleX(1) scaleY(1); }
+}
+
+@keyframes domain-cut-glow {
+  0% { opacity: 0.5; fill: #ff5560; }
+  5% { opacity: 0.38; fill: #e3192a; }
+  20% { opacity: 0.16; }
+  50% { opacity: 0.05; }
+  100% { opacity: 0; }
+}
+
+@keyframes domain-cut-scar {
+  0%, 55% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* The domain itself: a shrine under a blood moon, on the empty side of the
+   page. On the settings and account pages Anri steps out in front of it, her
+   hands in the sign, the moon right behind her head. Both are sized from her
+   width, so they stay together. */
+.domain-stage {
+  position: absolute;
+  top: clamp(64px, 9vh, 104px);
+  left: clamp(34px, 5vw, 100px);
+  width: clamp(200px, 17.5vw, 300px);
+  aspect-ratio: 662 / 1180;
+  transition: opacity 700ms ease, filter 700ms ease;
+}
+
+.domain-shrine {
+  position: absolute;
+  top: 4.5%;
+  left: -105%;
+  width: 310%;
+  height: auto;
+  opacity: 0.3;
+  mix-blend-mode: screen;
+  user-select: none;
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 44%, #000 46%, transparent 78%);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 44%, #000 46%, transparent 78%);
+  animation: domain-shrine-pulse 11s ease-in-out infinite;
+}
+
+@keyframes domain-shrine-pulse {
+  0%, 100% { opacity: 0.27; }
+  50% { opacity: 0.36; }
+}
+
+.domain-caster {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  filter: blur(6px);
+  transform: translateY(18px) scale(0.97);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 44%, transparent 70%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 44%, transparent 70%);
+  transition:
+    opacity 380ms ease,
+    filter 380ms ease,
+    transform 500ms ease-in,
+    visibility 0s linear 500ms;
+}
+
+.is-panel-open .domain-caster {
+  opacity: 1;
+  visibility: visible;
+  filter: blur(0);
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 760ms ease 140ms,
+    filter 760ms ease 140ms,
+    transform 1200ms cubic-bezier(0.16, 1, 0.3, 1) 140ms,
+    visibility 0s linear 0s;
+}
+
+.domain-caster-body {
+  position: absolute;
+  inset: 0;
+  animation: domain-caster-float 7s ease-in-out infinite;
+}
+
+.domain-anri,
+.domain-anri-marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.domain-anri {
+  opacity: 0.94;
+  filter: brightness(0.6) saturate(0.88) contrast(1.06) drop-shadow(0 0 14px #ff1f2f26);
+}
+
+/* Her markings flare as she arrives, then go on breathing faintly. */
+.domain-anri-marks {
+  opacity: 0;
+}
+
+.is-panel-open .domain-anri-marks {
+  animation:
+    domain-marks-awaken 3.4s ease-in-out 520ms both,
+    domain-marks-rest 6.5s ease-in-out 3.92s infinite;
+}
+
+@keyframes domain-caster-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes domain-marks-awaken {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  30% { opacity: 0.42; }
+  48% { opacity: 0.9; }
+  68% { opacity: 0.3; }
+  84% { opacity: 0.55; }
+  100% { opacity: 0.18; }
+}
+
+@keyframes domain-marks-rest {
+  0%, 100% { opacity: 0.18; }
+  50% { opacity: 0.4; }
+}
+
+@media (max-width: 1099px), (max-height: 600px) {
+  .domain-stage {
+    display: none;
+  }
+}
+
+/* Notes to self are another room: the domain recedes behind them. */
+.is-notes-open .domain-stage {
+  opacity: 0.32;
+  filter: blur(1.5px);
+}
+
+/* A cut through the day note's corner, instead of tape. */
+[data-theme='dismantle'] .day-note::before {
+  content: '';
+  position: absolute;
+  top: -16px;
+  left: -14px;
+  width: 2px;
+  height: 44px;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, transparent, var(--dm-glow) 45%, #ffd0d3 52%, var(--dm-glow) 60%, transparent);
+  box-shadow: 0 0 8px #ff1f2f99;
+  opacity: 0.85;
+  pointer-events: none;
+  transform: rotate(32deg);
+  transition: opacity 200ms ease;
+}
+
+[data-theme='dismantle'] .day-note.is-tasks-open::before {
+  opacity: 0;
+}
+
+/* ——— Header and floating controls ——— */
+
+[data-theme='dismantle'] .brand {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .brand-mark path {
+  stroke: var(--dm-blood-bright);
+  filter: drop-shadow(0 0 5px #ff1f2f80);
+}
+
+[data-theme='dismantle'] .settings-trigger,
+[data-theme='dismantle'] .social-trigger,
+[data-theme='dismantle'] .flash-trigger {
+  border-color: var(--dm-line-strong);
+  background: #130e0fb8;
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .settings-trigger:hover,
+[data-theme='dismantle'] .social-trigger:hover,
+[data-theme='dismantle'] .flash-trigger:hover {
+  border-color: var(--dm-blood);
+  background: var(--dm-surface-2);
+  color: white;
+  box-shadow: 0 0 0 1px #c3121f40, 0 6px 22px #c3121f38;
+}
+
+[data-theme='dismantle'] .settings-hint,
+[data-theme='dismantle'] .social-hint,
+[data-theme='dismantle'] .people-trigger-hint,
+[data-theme='dismantle'] .notes-trigger-hint,
+[data-theme='dismantle'] .flash-trigger-hint {
+  border-color: var(--dm-line-strong);
+  background: #130e0ff2;
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .settings-hint {
+  background: transparent;
+}
+
+[data-theme='dismantle'] .people-trigger,
+[data-theme='dismantle'] .notes-trigger {
+  border-color: var(--dm-line-strong);
+  background: #130e0fe6;
+  color: var(--dm-ink-soft);
+  box-shadow: 0 4px 18px #00000059;
+}
+
+[data-theme='dismantle'] .people-trigger:hover,
+[data-theme='dismantle'] .notes-trigger:hover {
+  border-color: var(--dm-blood);
+  background: var(--dm-surface-2);
+  color: white;
+}
+
+[data-theme='dismantle'] .people-trigger:disabled:hover,
+[data-theme='dismantle'] .notes-trigger.is-waiting:hover {
+  border-color: var(--dm-line-strong);
+  background: #130e0fe6;
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .is-people-open .people-trigger,
+[data-theme='dismantle'] .is-notes-open .notes-trigger {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+  box-shadow: 0 0 22px #c3121f66;
+}
+
+[data-theme='dismantle'] .is-people-open .people-trigger:hover,
+[data-theme='dismantle'] .is-notes-open .notes-trigger:hover {
+  border-color: var(--dm-blood-bright);
+  background: var(--dm-blood-bright);
+  color: white;
+}
+
+[data-theme='dismantle'] .onboarding-trigger {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .onboarding-trigger:hover .onboarding-trigger-face,
+[data-theme='dismantle'] .onboarding-trigger:focus-visible .onboarding-trigger-face {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface-2);
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .onboarding-trigger-note {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .onboarding-trigger-peek {
+  filter: drop-shadow(0 0 10px #ff1f2f40);
+}
+
+/* ——— Hero: the last word of the title has been cut clean through ——— */
+
+[data-theme='dismantle'] .eyebrow {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .eyebrow > span,
+[data-theme='dismantle'] .day-note-heading > span,
+[data-theme='dismantle'] .today-tasks-eyebrow > i {
+  width: 10px;
+  height: 1.6px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--dm-glow) 35%, #ffc2c6 50%, var(--dm-glow) 65%, transparent);
+  box-shadow: 0 0 5px #ff1f2fb3;
+  transform: rotate(-38deg);
+}
+
+[data-theme='dismantle'] .hero-heading h1 {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .hero-heading h1 em {
+  position: relative;
+  display: inline-block;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Two halves of the word, slid apart along the cut, with the blade's line between. */
+[data-theme='dismantle'] .hero-heading h1 em::before,
+[data-theme='dismantle'] .hero-heading h1 em::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(100deg, transparent 0 38%, #ffd6d9e6 47%, transparent 56%),
+    linear-gradient(170deg, #ff4f5a 0%, #e3192a 38%, #a10d18 72%, #6d0710 100%);
+  background-size: 260% 100%, 100% 100%;
+  background-position: 120% 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 14px #ff1f2f47);
+  pointer-events: none;
+}
+
+[data-theme='dismantle'] .hero-heading h1 em::before {
+  clip-path: polygon(-5% -40%, 105% -40%, 105% 37%, -5% 69%);
+  animation: dismantle-title-top 7.5s cubic-bezier(0.2, 0.9, 0.25, 1) infinite;
+}
+
+[data-theme='dismantle'] .hero-heading h1 em::after {
+  clip-path: polygon(-5% 69%, 105% 37%, 105% 140%, -5% 140%);
+  animation: dismantle-title-bottom 7.5s cubic-bezier(0.2, 0.9, 0.25, 1) infinite;
+}
+
+@keyframes dismantle-title-top {
+  0%, 9% { transform: translate(0, 0); background-position: 120% 0, 0 0; }
+  11% { transform: translate(3.5px, -1.6px); background-position: -20% 0, 0 0; }
+  18%, 100% { transform: translate(1.4px, -0.6px); background-position: -20% 0, 0 0; }
+}
+
+@keyframes dismantle-title-bottom {
+  0%, 9% { transform: translate(0, 0); background-position: 120% 0, 0 0; }
+  11% { transform: translate(-3.5px, 1.6px); background-position: -20% 0, 0 0; }
+  18%, 100% { transform: translate(-1.4px, 0.6px); background-position: -20% 0, 0 0; }
+}
+
+/* Blood, slowly glinting, through the other emphasised words. */
+[data-theme='dismantle'] .intention-note p em,
+[data-theme='dismantle'] .settings-header h2 em,
+[data-theme='dismantle'] .empty-tracker h2 em,
+[data-theme='dismantle'] .paper-notes-heading h1 em {
+  margin: 0 -0.12em 0 -0.04em;
+  padding: 0 0.12em 0 0.04em;
+  background-image:
+    linear-gradient(100deg, transparent 0 40%, #ffd6d9cc 48%, transparent 56%),
+    linear-gradient(165deg, #ff5a64 0%, #e3192a 45%, #9e0c17 100%);
+  background-size: 300% 100%, 100% 100%;
+  background-position: 130% 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: dismantle-glint 6s ease-in-out infinite;
+}
+
+@keyframes dismantle-glint {
+  0%, 62% { background-position: 130% 0, 0 0; }
+  80%, 100% { background-position: -30% 0, 0 0; }
+}
+
+[data-theme='dismantle'] .hero-subtitle {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .return-to-own {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .return-to-own:hover {
+  border-color: var(--dm-blood);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .viewed-profile-identity small {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .profile-relationship-error {
+  color: var(--dm-blood-bright);
+}
+
+/* ——— The wheel ——— */
+
+[data-theme='dismantle'] .habit-list-heading,
+[data-theme='dismantle'] .habit-list-count {
+  fill: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .habit-index {
+  fill: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .habit-name {
+  fill: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .habit-label.is-active .habit-name {
+  fill: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .habit-tick {
+  stroke: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .day-cell {
+  fill: #120b0ced;
+  stroke: #341b20;
+}
+
+[data-theme='dismantle'] .day-cell.is-today {
+  fill: #2a0e12;
+  stroke: var(--dm-blood);
+}
+
+[data-theme='dismantle'] .day-cell.is-done {
+  fill: var(--blood-fill, var(--dm-blood));
+  stroke: #a30f1b;
+}
+
+[data-theme='dismantle'] .day-cell.is-unavailable {
+  stroke: #26171a;
+}
+
+[data-theme='dismantle'] .unavailable-ground {
+  fill: #0a0607;
+}
+
+[data-theme='dismantle'] .unavailable-zigzag {
+  stroke: #33191d;
+}
+
+[data-theme='dismantle'] .day-cell:hover {
+  fill: #2a1b1e;
+  stroke: #7a2b33;
+}
+
+[data-theme='dismantle'] .day-cell.is-done:hover {
+  fill: var(--blood-fill-hover, var(--dm-blood-bright));
+  stroke: #ff5a64;
+}
+
+[data-theme='dismantle'] .day-cell.is-unavailable:hover {
+  stroke: #4a3437;
+}
+
+[data-theme='dismantle'] .day-cell.is-read-only:hover {
+  stroke: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .day-cell:focus-visible {
+  stroke: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .day-cell.is-done:focus-visible {
+  stroke: white;
+}
+
+[data-theme='dismantle'] .day-cell.is-unavailable:focus-visible {
+  stroke: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .blood-core {
+  stop-color: #e3192a;
+}
+
+[data-theme='dismantle'] .blood-rim {
+  stop-color: #7c0a13;
+}
+
+[data-theme='dismantle'] .blood-core.is-hover {
+  stop-color: #ff3b48;
+}
+
+[data-theme='dismantle'] .blood-rim.is-hover {
+  stop-color: #a8111d;
+}
+
+[data-theme='dismantle'] .blood-cut {
+  fill: none;
+  stroke: #ff9aa1;
+  stroke-width: 0.6px;
+  stroke-linecap: round;
+  opacity: 0.32;
+}
+
+[data-theme='dismantle'] .blood-cut.is-faint {
+  opacity: 0.16;
+}
+
+[data-theme='dismantle'] .week-divider {
+  stroke: #3d2a2e;
+}
+
+[data-theme='dismantle'] .day-label text {
+  fill: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .day-visit-dot {
+  fill: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .day-label.is-today text {
+  font-weight: 600;
+  fill: white;
+}
+
+[data-theme='dismantle'] .day-label:hover .date-label-hit,
+[data-theme='dismantle'] .day-label:focus-visible .date-label-hit,
+[data-theme='dismantle'] .day-label.is-note-open .date-label-hit {
+  fill: #1b1315e6;
+  stroke: #7a2b33;
+}
+
+[data-theme='dismantle'] .day-label.is-today:hover .date-label-hit,
+[data-theme='dismantle'] .day-label.is-today:focus-visible .date-label-hit,
+[data-theme='dismantle'] .day-label.is-today.is-note-open .date-label-hit {
+  fill: transparent;
+  stroke: transparent;
+}
+
+[data-theme='dismantle'] .day-label:hover text,
+[data-theme='dismantle'] .day-label:focus-visible text,
+[data-theme='dismantle'] .day-label.is-note-open text,
+[data-theme='dismantle'] .day-label.is-task-day text {
+  fill: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .day-label.is-today:hover text,
+[data-theme='dismantle'] .day-label.is-today:focus-visible text,
+[data-theme='dismantle'] .day-label.is-today.is-note-open text,
+[data-theme='dismantle'] .day-label.is-today.is-task-day text {
+  fill: white;
+}
+
+[data-theme='dismantle'] .task-day-marker circle {
+  stroke: var(--dm-blood-bright);
+  stroke-dasharray: 2.2 2.4;
+  stroke-linecap: round;
+}
+
+[data-theme='dismantle'] .day-label.is-today .today-marker {
+  fill: var(--dm-blood);
+  animation: dismantle-today-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes dismantle-today-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px #ff1f2f99); }
+  50% { filter: drop-shadow(0 0 7px #ff1f2fee); }
+}
+
+/* The score: two fresh cuts on top, and a number in blood with a blade's glint. */
+[data-theme='dismantle'] .score-value {
+  fill: var(--blood-score, var(--dm-blood-bright));
+  filter: drop-shadow(0 0 18px #ff1f2f30);
+}
+
+[data-theme='dismantle'] .score-blood-light {
+  stop-color: #ff4d58;
+}
+
+[data-theme='dismantle'] .score-blood-mid {
+  stop-color: #d4182a;
+}
+
+[data-theme='dismantle'] .score-blood-deep {
+  stop-color: #8a0b16;
+}
+
+[data-theme='dismantle'] .score-glint {
+  stop-color: #ffe3e5;
+  stop-opacity: 0.85;
+}
+
+[data-theme='dismantle'] .score-glint.is-clear {
+  stop-opacity: 0;
+}
+
+[data-theme='dismantle'] .score-percent {
+  fill: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .score-label {
+  fill: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .score-divider {
+  stroke: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .score-detail {
+  fill: var(--dm-muted);
+}
+
+.cleave-mark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dismantle-cleave-glint 5.2s ease-in-out infinite;
+}
+
+.cleave-cut {
+  fill: #e3192a;
+  filter: drop-shadow(0 0 3px #ff1f2fcc);
+}
+
+.cleave-cut-core {
+  fill: #ffe1e3;
+}
+
+@keyframes dismantle-cleave-glint {
+  0%, 78%, 100% { opacity: 0.88; }
+  82% { opacity: 1; filter: brightness(1.9); }
+  87% { opacity: 0.9; filter: brightness(1); }
+}
+
+/* Leaving: blades streak round the rings, and every tile one passes through
+   is cut along its line, slips apart along the cut and falls away. That is
+   painted on a canvas laid over the wheel (WheelShatterCanvas); the tiles
+   hide the moment it takes over. The wheel keeps a brisker pace than the
+   other themes, so the last piece has fallen before the page changes
+   (SHATTER_STAGGER in wheelShatter.ts). */
+[data-theme='dismantle'] .app.is-sweeping-out {
+  --sweep-stagger: 700ms !important;
+}
+
+.wheel-shatter-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.circular-tracker.is-shattering .day-cell {
+  visibility: hidden;
+  animation: none !important;
+}
+
+/* Everything else on the wheel slips away as the blades reach it. */
+[data-theme='dismantle'] .is-sweeping-out svg .sweep-item:not(.day-cell) {
+  animation-name: dismantle-label-out;
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0.4);
+}
+
+[data-theme='dismantle'] .is-sweeping-out .workspace .sweep-item:not(svg *),
+[data-theme='dismantle'] .is-sweeping-out .page-footer .sweep-item {
+  animation-name: dismantle-copy-out;
+}
+
+/* Coming back, the tiles mend: each one slots back into place from a little
+   way out, with a glint along its edge. */
+[data-theme='dismantle'] .is-sweeping-in svg .day-cell.sweep-item {
+  animation-name: dismantle-cell-in;
+  animation-duration: 420ms;
+}
+
+@keyframes dismantle-label-out {
+  to { opacity: 0; transform: translateY(5px); }
+}
+
+@keyframes dismantle-copy-out {
+  0% { opacity: 1; translate: 0 0; }
+  100% { opacity: 0; translate: 6px 3px; filter: blur(1px); }
+}
+
+@keyframes dismantle-cell-in {
+  0% { opacity: 0; transform: scale(0.55); }
+  45% { opacity: 1; stroke: #ff6b74; }
+  70% { transform: scale(1.03); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ——— Notes around the wheel ——— */
+
+[data-theme='dismantle'] .small-cross {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  font-size: 0;
+}
+
+[data-theme='dismantle'] .small-cross::before,
+[data-theme='dismantle'] .small-cross::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 1.6px;
+  margin: -0.8px 0 0 -9px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--dm-glow) 30%, #ffd0d3 50%, var(--dm-glow) 70%, transparent);
+  box-shadow: 0 0 6px #ff1f2fb3;
+  transform: rotate(-50deg);
+}
+
+[data-theme='dismantle'] .small-cross::after {
+  width: 12px;
+  margin-left: -2px;
+  margin-top: 3px;
+  opacity: 0.8;
+}
+
+[data-theme='dismantle'] .intention-note p {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .note-caption {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .day-note-heading {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .day-counter {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .day-counter > span {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .day-note-copy {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .day-note-line {
+  background: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .day-note-trigger:hover .day-note-line,
+[data-theme='dismantle'] .day-note-trigger:focus-visible .day-note-line {
+  background-color: var(--dm-blood-bright);
+  box-shadow: 0 0 8px #ff1f2f99;
+}
+
+[data-theme='dismantle'] .day-note-hint {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .lock-reminder > span {
+  color: var(--dm-muted);
+}
+
+/* ——— Footer ——— */
+
+[data-theme='dismantle'] .legend {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .legend-done {
+  background:
+    linear-gradient(-50deg, transparent 44%, #ff9aa1aa 47% 53%, transparent 56%),
+    linear-gradient(160deg, #e3192a, #8a0b16);
+  box-shadow: 0 0 6px #ff1f2f66;
+}
+
+[data-theme='dismantle'] .legend-undone {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+}
+
+[data-theme='dismantle'] .legend-unavailable {
+  border-color: #3a2a2d;
+  background: linear-gradient(135deg, transparent 35%, #4a3437 36% 47%, transparent 48%) 0 0 / 4px 4px, #100b0c;
+}
+
+[data-theme='dismantle'] .footer-guide > p,
+[data-theme='dismantle'] .footer-signoff > p {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .demo-label,
+[data-theme='dismantle'] .viewing-label,
+[data-theme='dismantle'] .saved-label {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .demo-label:hover,
+[data-theme='dismantle'] .viewing-label:hover {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .month-arrow {
+  border-color: var(--dm-line-strong);
+  background: #130e0fcc;
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .month-arrow:hover {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+  box-shadow: 0 0 18px #c3121f73;
+}
+
+[data-theme='dismantle'] .month-name {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .month-year,
+[data-theme='dismantle'] .month-trigger > svg {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .month-caption {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .month-caption > button {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .month-popover {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  box-shadow: 0 16px 50px #000000b3, 0 0 0 1px #c3121f1a;
+}
+
+[data-theme='dismantle'] .icon-button:hover {
+  background: var(--dm-surface-3);
+}
+
+[data-theme='dismantle'] .month-option {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .month-option:hover {
+  background: var(--dm-surface-3);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .month-option[aria-pressed='true'] {
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .back-to-today {
+  border-top-color: var(--dm-line);
+  color: var(--dm-muted);
+}
+
+/* ——— Day notes: a dark talisman, pinned with a drop of blood ——— */
+
+[data-theme='dismantle'] .date-note-connector path {
+  stroke: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .date-note-card {
+  border-color: #3b2226;
+  background:
+    linear-gradient(105deg, #ffffff0a 0%, transparent 23%, transparent 72%, #00000059 100%),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 23px, #ff2a3a17 24px),
+    #161012;
+  animation-name: dismantle-note-breeze;
+}
+
+[data-theme='dismantle'] .date-note-card::before {
+  background:
+    linear-gradient(112deg, transparent 12%, #ffffff0d 42%, transparent 65%),
+    linear-gradient(to bottom, transparent 67%, #00000026 100%);
+}
+
+[data-theme='dismantle'] .date-note-card::after {
+  background: linear-gradient(135deg, #00000040 0 48%, #2c1b1e 50% 74%, #1c1315 76%);
+  filter: drop-shadow(-1px -1px 1px #00000080);
+}
+
+[data-theme='dismantle'] .date-note-pin {
+  border-color: #5c0710;
+  background:
+    radial-gradient(circle at 34% 27%, #ffffffd9 0 7%, #ff9aa1 9% 14%, transparent 16%),
+    radial-gradient(circle at 42% 38%, #ff4552 0 34%, #c3121f 58%, #6d0710 100%);
+  box-shadow: 0 2px 2px #00000080, 0 0 12px #ff1f2f66;
+}
+
+[data-theme='dismantle'] .date-note-pin::after {
+  background: linear-gradient(to right, #6a4a4e, #2a1a1d);
+  box-shadow: 1px 2px 2px #00000066;
+}
+
+[data-theme='dismantle'] .date-note-header {
+  border-bottom-color: #ff2a3a24;
+  background: #1a1214f0;
+}
+
+[data-theme='dismantle'] .date-note-header span {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .date-note-header p {
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .date-note-header button {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .date-note-header button:hover,
+[data-theme='dismantle'] .date-note-header button:focus-visible {
+  background: var(--dm-surface-3);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .date-note-card textarea {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .date-note-card footer {
+  background: #1a1214f0;
+  color: var(--dm-muted);
+}
+
+@keyframes dismantle-note-breeze {
+  0%, 100% {
+    box-shadow: 0 2px 3px #00000066, 0 14px 23px #00000080, 0 30px 48px #0000004d, 0 0 0 1px #c3121f14;
+    transform: translate3d(0, 0, 0) rotateX(0.4deg) rotateY(-0.8deg) rotateZ(-0.65deg);
+  }
+  22% {
+    box-shadow: -2px 3px 4px #00000066, 7px 19px 29px #0000007a, 11px 34px 52px #00000047, 0 0 0 1px #c3121f14;
+    transform: translate3d(0, -1px, 6px) rotateX(-1.8deg) rotateY(2.2deg) rotateZ(0.9deg);
+  }
+  46% {
+    box-shadow: 1px 2px 3px #00000066, -4px 16px 25px #0000007d, -7px 31px 46px #00000047, 0 0 0 1px #c3121f14;
+    transform: translate3d(0, 0.5px, 2px) rotateX(1.25deg) rotateY(-1.35deg) rotateZ(-0.35deg);
+  }
+  68% {
+    box-shadow: 2px 4px 5px #00000066, -7px 22px 34px #00000075, -12px 38px 56px #00000045, 0 0 0 1px #c3121f14;
+    transform: translate3d(0, -1.5px, 9px) rotateX(-2.2deg) rotateY(2.7deg) rotateZ(1.05deg);
+  }
+  86% {
+    box-shadow: -1px 2px 3px #00000066, 3px 17px 27px #0000007a, 6px 33px 50px #00000047, 0 0 0 1px #c3121f14;
+    transform: translate3d(0, -0.35px, 4px) rotateX(-0.55deg) rotateY(0.75deg) rotateZ(0.18deg);
+  }
+}
+
+/* ——— Tooltip ——— */
+
+[data-theme='dismantle'] .cell-tooltip {
+  border-color: var(--dm-line-strong);
+  background: #130e0ff5;
+  box-shadow: 0 10px 30px #000000a6, 0 0 0 1px #c3121f14;
+}
+
+[data-theme='dismantle'] .tooltip-date,
+[data-theme='dismantle'] .tooltip-action {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .tooltip-date > span {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .tooltip-habit {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .tooltip-habit > svg {
+  color: var(--dm-blood-bright);
+}
+
+/* ——— Empty month ——— */
+
+[data-theme='dismantle'] .empty-tracker > svg {
+  stroke: var(--dm-blood);
+  filter: drop-shadow(0 0 6px #ff1f2f59);
+}
+
+[data-theme='dismantle'] .empty-tracker > p {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .empty-tracker > button {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .empty-tracker > button:hover {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+}
+
+/* ——— Settings ——— */
+
+[data-theme='dismantle'] .settings-header p:last-child,
+[data-theme='dismantle'] .social-header p:last-child {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .settings-body,
+[data-theme='dismantle'] .social-body {
+  scrollbar-color: var(--dm-line-strong) transparent;
+}
+
+[data-theme='dismantle'] .settings-section {
+  border-bottom-color: var(--dm-line);
+}
+
+[data-theme='dismantle'] .settings-month-picker span {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .settings-month-arrow {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .settings-month-arrow:hover:not(:disabled) {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .settings-month-note,
+[data-theme='dismantle'] .field-help {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .toggle {
+  background: var(--dm-surface-3);
+}
+
+[data-theme='dismantle'] .toggle > span {
+  background: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .toggle[aria-checked='true'] {
+  background: var(--dm-blood);
+  box-shadow: 0 0 12px #c3121f66;
+}
+
+[data-theme='dismantle'] .title-input {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .habit-limit > span,
+[data-theme='dismantle'] .editor-index {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .habit-editor-row + .habit-editor-row {
+  border-top-color: var(--dm-line);
+}
+
+[data-theme='dismantle'] .habit-editor-row > input {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .remove-habit {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .remove-habit:hover {
+  background: var(--dm-surface-3);
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .add-habit-row {
+  border-color: var(--dm-line-strong);
+  background: #130e0f99;
+}
+
+[data-theme='dismantle'] .add-habit-row:focus-within {
+  border-color: var(--dm-blood);
+}
+
+[data-theme='dismantle'] .add-habit {
+  background: var(--dm-surface-3);
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .add-habit:hover {
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .limit-note,
+[data-theme='dismantle'] .empty-habits-hint,
+[data-theme='dismantle'] .reset-section > p,
+[data-theme='dismantle'] .reset-confirmation > span {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .reset-button {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .reset-button:hover {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .reset-confirmation {
+  border-color: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .reset-confirmation button {
+  border-color: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .reset-confirmation .confirm-clear {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .reset-section > .reset-staged {
+  background: var(--dm-surface-3);
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .settings-error {
+  border-left-color: var(--dm-blood);
+  background: var(--dm-surface-2);
+}
+
+[data-theme='dismantle'] .settings-footer {
+  border-top-color: var(--dm-line);
+}
+
+[data-theme='dismantle'] .settings-autosave {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .settings-autosave > svg,
+[data-theme='dismantle'] .settings-autosave strong {
+  color: var(--dm-blood-bright);
+}
+
+/* The theme picker itself. */
+[data-theme='dismantle'] .theme-option {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+}
+
+[data-theme='dismantle'] .theme-option:hover {
+  border-color: #7a2b33;
+}
+
+[data-theme='dismantle'] .theme-option.is-selected {
+  border-color: var(--dm-blood);
+  box-shadow: 0 8px 26px #c3121f33, 0 0 0 1px #c3121f4d;
+}
+
+[data-theme='dismantle'] .theme-option-paper {
+  stroke: #ffffff14;
+}
+
+[data-theme='dismantle'] .theme-option-copy > small {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .theme-option-check {
+  background: var(--dm-blood);
+}
+
+/* ——— People, profiles and account ——— */
+
+[data-theme='dismantle'] .people-drawer {
+  border-color: var(--dm-line-strong);
+  background: #110c0df2;
+  box-shadow: 0 24px 70px #000000c2, 0 0 0 1px #c3121f14;
+}
+
+[data-theme='dismantle'] .social-tabs {
+  border-bottom-color: var(--dm-line);
+}
+
+[data-theme='dismantle'] .social-tabs > button {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .social-tabs > button:hover {
+  background: var(--dm-surface-2);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .social-tabs > button::after {
+  background: var(--dm-blood-bright);
+  box-shadow: 0 0 8px #ff1f2fb3;
+}
+
+[data-theme='dismantle'] .social-tabs > button.is-active {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .people-list-label {
+  border-bottom-color: var(--dm-line);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .people-list-label strong,
+[data-theme='dismantle'] .people-sign-in {
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .people-sign-in {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+}
+
+[data-theme='dismantle'] .people-row,
+[data-theme='dismantle'] .people-row:first-child,
+[data-theme='dismantle'] .profile-result,
+[data-theme='dismantle'] .profile-result:first-of-type {
+  border-color: var(--dm-line);
+}
+
+[data-theme='dismantle'] .people-row:hover,
+[data-theme='dismantle'] .profile-result:hover {
+  background: var(--dm-surface-2);
+}
+
+[data-theme='dismantle'] .people-row.is-active {
+  background: var(--dm-surface-2);
+  box-shadow: inset 2px 0 var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .follow-button {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .follow-button.is-following {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .follow-button:hover:not(:disabled) {
+  border-color: var(--dm-blood-bright);
+  background: var(--dm-blood-bright);
+  color: white;
+}
+
+[data-theme='dismantle'] .people-you-label,
+[data-theme='dismantle'] .social-kicker,
+[data-theme='dismantle'] .profile-result-copy small,
+[data-theme='dismantle'] .profile-result-meta,
+[data-theme='dismantle'] .auth-intro,
+[data-theme='dismantle'] .account-identity > div > span,
+[data-theme='dismantle'] .account-social-stats span,
+[data-theme='dismantle'] .account-setting small,
+[data-theme='dismantle'] .account-guest-note,
+[data-theme='dismantle'] .profile-loading,
+[data-theme='dismantle'] .public-profile-title > div > span,
+[data-theme='dismantle'] .profile-score > span,
+[data-theme='dismantle'] .profile-stats > div:last-child span,
+[data-theme='dismantle'] .auth-switch {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .social-section-heading > span {
+  border-color: var(--dm-line-strong);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .profile-search,
+[data-theme='dismantle'] .auth-input {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .profile-search:focus-within,
+[data-theme='dismantle'] .auth-input:focus-within {
+  border-color: var(--dm-blood);
+  box-shadow: 0 0 0 3px #c3121f2e;
+}
+
+[data-theme='dismantle'] .profile-search > input,
+[data-theme='dismantle'] .auth-input > input {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .social-empty,
+[data-theme='dismantle'] .profile-no-habits {
+  border-color: var(--dm-line-strong);
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .social-empty p,
+[data-theme='dismantle'] .auth-form > label > span,
+[data-theme='dismantle'] .profile-stats > div:last-child p {
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .profile-avatar {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface-3);
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .social-error {
+  border-color: #6d1a22;
+  background: #1f0c0f;
+  color: #ff8a92;
+}
+
+[data-theme='dismantle'] .auth-submit {
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .auth-submit:hover:not(:disabled) {
+  background: var(--dm-blood-bright);
+  box-shadow: 0 0 20px #c3121f66;
+}
+
+[data-theme='dismantle'] .auth-switch > button {
+  border-bottom-color: var(--dm-blood);
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .public-note {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface-2);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .public-note strong,
+[data-theme='dismantle'] .profile-stats > div:last-child p strong {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .account-identity,
+[data-theme='dismantle'] .account-social-stats,
+[data-theme='dismantle'] .account-social-stats > div + div,
+[data-theme='dismantle'] .account-setting,
+[data-theme='dismantle'] .profile-habits li {
+  border-color: var(--dm-line);
+}
+
+[data-theme='dismantle'] .account-identity > svg {
+  border-color: var(--dm-line-strong);
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .account-actions > button {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+}
+
+[data-theme='dismantle'] .account-actions > button:hover:not(:disabled) {
+  border-color: #7a2b33;
+  background: var(--dm-surface-2);
+}
+
+[data-theme='dismantle'] .account-actions > .logout-button,
+[data-theme='dismantle'] .profile-back,
+[data-theme='dismantle'] .profile-month > button {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .profile-back:hover,
+[data-theme='dismantle'] .profile-month > button:hover:not(:disabled) {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .profile-month {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+}
+
+[data-theme='dismantle'] .profile-stats {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface-2);
+}
+
+[data-theme='dismantle'] .profile-score {
+  border-right-color: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .profile-habits li > span {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .success-toast {
+  background: var(--dm-blood);
+  color: white;
+  box-shadow: 0 6px 24px #c3121f59;
+}
+
+[data-theme='dismantle'] .storage-warning {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  color: var(--dm-ink);
+}
+
+/* ——— Loading ——— */
+
+[data-theme='dismantle'] .account-loading-mark path {
+  stroke: var(--dm-blood-bright);
+  filter: drop-shadow(0 0 6px #ff1f2f99);
+}
+
+[data-theme='dismantle'] .account-loading-label {
+  color: var(--dm-muted);
+}
+
+/* ——— Today's tasks: a kept task is cut, not crossed out ——— */
+
+[data-theme='dismantle'] .today-tasks-eyebrow,
+[data-theme='dismantle'] .today-tasks-summary {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .today-tasks-month {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .today-task {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .today-task:not([aria-disabled='true']):hover {
+  color: white;
+}
+
+[data-theme='dismantle'] .today-task-check path {
+  stroke: #7a5f62;
+}
+
+[data-theme='dismantle'] .today-task:not([aria-disabled='true']):hover .today-task-check path {
+  stroke: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .today-task.is-done .today-task-check path,
+[data-theme='dismantle'] .today-task.is-done:not([aria-disabled='true']):hover .today-task-check path {
+  stroke: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .today-task.is-done .today-task-check {
+  filter: drop-shadow(0 0 4px #ff1f2fb3);
+}
+
+[data-theme='dismantle'] .today-task.is-done .today-task-name {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .today-task-scribble {
+  z-index: 1;
+}
+
+[data-theme='dismantle'] .today-task-ink {
+  stroke: #ff4652;
+  stroke-width: 1.5px;
+  stroke-linecap: butt;
+  opacity: 1;
+  filter: drop-shadow(0 0 1.5px #ff1f2f) drop-shadow(0 0 5px #ff1f2f99);
+}
+
+[data-theme='dismantle'] .today-task-crumb {
+  fill: var(--dm-blood-bright);
+}
+
+/* The two halves of a name the long cut went through, slid apart along it. */
+[data-theme='dismantle'] .today-task-label[data-slice]::before,
+[data-theme='dismantle'] .today-task-label[data-slice]::after {
+  content: attr(data-name);
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow-wrap: anywhere;
+  color: var(--dm-faint);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 90ms ease,
+    transform 420ms cubic-bezier(0.16, 1.2, 0.3, 1);
+}
+
+[data-theme='dismantle'] .today-task-label[data-slice]::before {
+  clip-path: polygon(-10% -80%, 110% -80%, 110% var(--cut-right), 100% var(--cut-right), 0% var(--cut-left), -10% var(--cut-left));
+}
+
+[data-theme='dismantle'] .today-task-label[data-slice]::after {
+  clip-path: polygon(-10% var(--cut-left), 0% var(--cut-left), 100% var(--cut-right), 110% var(--cut-right), 110% 180%, -10% 180%);
+}
+
+[data-theme='dismantle'] .today-task-label[data-slice='cut'] .today-task-name {
+  color: transparent;
+  transition: none;
+}
+
+[data-theme='dismantle'] .today-task-label[data-slice='cut']::before {
+  opacity: 1;
+  transform: translate(1.8px, -1.1px);
+}
+
+[data-theme='dismantle'] .today-task-label[data-slice='cut']::after {
+  opacity: 1;
+  transform: translate(-1.8px, 1.1px);
+}
+
+[data-theme='dismantle'] .today-task.is-locked,
+[data-theme='dismantle'] .today-task.is-unavailable {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .today-task.is-locked .today-task-check path,
+[data-theme='dismantle'] .today-task.is-unavailable .today-task-check path {
+  stroke: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .today-tasks-progress {
+  background: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .today-tasks-progress > i {
+  background: var(--dm-blood-bright);
+  box-shadow: 0 0 6px #ff1f2f;
+}
+
+/* ——— Notes to self: bone paper, a dark bin, and they arrive on fire ——— */
+
+[data-theme='dismantle'] .paper-notes-subtitle,
+[data-theme='dismantle'] .paper-ball-label small,
+[data-theme='dismantle'] .paper-empty p,
+[data-theme='dismantle'] .paper-notes-guide > p,
+[data-theme='dismantle'] .paper-notes-signoff > p,
+[data-theme='dismantle'] .paper-bin-caption {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .paper-ball-shadow > span {
+  background: radial-gradient(closest-side, #000000b3, #2a050966 62%, transparent);
+}
+
+[data-theme='dismantle'] .paper-ball-label > span {
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .paper-ball:not(:disabled):hover .paper-ball-label > span,
+[data-theme='dismantle'] .paper-ball:focus-visible .paper-ball-label > span {
+  color: white;
+  text-decoration-color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .paper-ball-slot[data-gesture='held']::before {
+  border-color: var(--dm-line-strong);
+}
+
+[data-theme='dismantle'] .paper-ball-slot[data-gesture='target']::before {
+  border-color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .paper-categories-title,
+[data-theme='dismantle'] .paper-category-count,
+[data-theme='dismantle'] .paper-notes-count {
+  color: var(--dm-faint);
+}
+
+[data-theme='dismantle'] .paper-categories button {
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .paper-categories button:hover,
+[data-theme='dismantle'] .paper-categories button:focus-visible {
+  color: var(--dm-ink);
+}
+
+[data-theme='dismantle'] .paper-categories button.is-selected {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .paper-categories button.is-selected .paper-category-count {
+  color: #ff8a92;
+}
+
+[data-theme='dismantle'] .paper-categories-marker {
+  background: var(--dm-blood-bright);
+  box-shadow: 0 0 8px #ff1f2fb3;
+}
+
+[data-theme='dismantle'] .paper-bin-line {
+  stroke: #a08a8c;
+}
+
+[data-theme='dismantle'] .paper-bin-ribs,
+[data-theme='dismantle'] .paper-bin-lip {
+  stroke: #ffffff17;
+}
+
+[data-theme='dismantle'] .paper-bin-mouth-shade {
+  fill: #000;
+}
+
+[data-theme='dismantle'] .paper-bin-poof {
+  stroke: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .paper-bin-armed-hint {
+  color: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .paper-bin-layer.is-back linearGradient stop:nth-child(1) { stop-color: #2b1d20; }
+[data-theme='dismantle'] .paper-bin-layer.is-back linearGradient stop:nth-child(2) { stop-color: #1b1214; }
+[data-theme='dismantle'] .paper-bin-layer.is-back linearGradient stop:nth-child(3) { stop-color: #0d0809; }
+[data-theme='dismantle'] .paper-bin-layer.is-back radialGradient stop { stop-color: #000; }
+[data-theme='dismantle'] .paper-bin-layer.is-front linearGradient stop:nth-child(1) { stop-color: #2a1c1f; }
+[data-theme='dismantle'] .paper-bin-layer.is-front linearGradient stop:nth-child(2) { stop-color: #3d2a2e; }
+[data-theme='dismantle'] .paper-bin-layer.is-front linearGradient stop:nth-child(3) { stop-color: #1a1113; }
+
+[data-theme='dismantle'] .paper-bin-undo {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+}
+
+[data-theme='dismantle'] .paper-bin-undo:not(:disabled):hover {
+  background: var(--dm-blood-bright);
+}
+
+[data-theme='dismantle'] .paper-empty-mark {
+  border-color: var(--dm-line-strong);
+  color: var(--dm-muted);
+}
+
+[data-theme='dismantle'] .paper-back {
+  border-color: var(--dm-line-strong);
+  background: #130e0fcc;
+  color: var(--dm-ink-soft);
+}
+
+[data-theme='dismantle'] .paper-back:not(:disabled):hover {
+  border-color: var(--dm-blood);
+  background: var(--dm-surface-2);
+  color: white;
+}
+
+[data-theme='dismantle'] .paper-new-note {
+  border-color: var(--dm-line-strong);
+  background: var(--dm-surface);
+  box-shadow: 0 4px 16px #00000066;
+}
+
+[data-theme='dismantle'] .paper-new-note:not(:disabled):hover {
+  border-color: var(--dm-blood);
+  background: var(--dm-blood);
+  color: white;
+  box-shadow: 0 0 22px #c3121f59;
+}
+
+/* The unfolded note is bone paper, so it keeps dark ink, with blood for accents. */
+[data-theme='dismantle'] .paper-sheet-meta,
+[data-theme='dismantle'] .paper-sheet-saved {
+  color: #7d6466;
+}
+
+[data-theme='dismantle'] .paper-kinds > button,
+[data-theme='dismantle'] .paper-sheet-close,
+[data-theme='dismantle'] .paper-sheet-discard {
+  color: #6e4f52;
+}
+
+[data-theme='dismantle'] .paper-kinds > button:hover,
+[data-theme='dismantle'] .paper-sheet-discard:hover {
+  border-color: #d8c3bd;
+  color: var(--dm-sumi);
+}
+
+[data-theme='dismantle'] .paper-kinds > button.is-selected,
+[data-theme='dismantle'] .paper-sheet-discard.is-confirming {
+  border-color: #a30f1b;
+  background: #a30f1b;
+  color: white;
+}
+
+[data-theme='dismantle'] .paper-sheet-close:hover,
+[data-theme='dismantle'] .paper-sheet-close:focus-visible {
+  background: #e3d5cd;
+  color: var(--dm-sumi);
+}
+
+[data-theme='dismantle'] .paper-sheet-close-hint {
+  border-color: #d8c3bd;
+  background: #f1e8e0f2;
+  color: #6e4f52;
+}
+
+[data-theme='dismantle'] .paper-sheet-title {
+  border-bottom-color: #8a0b1633;
+  color: var(--dm-sumi);
+}
+
+[data-theme='dismantle'] .paper-sheet-title:focus {
+  border-bottom-color: #a30f1b;
+}
+
+[data-theme='dismantle'] .paper-sheet-title::placeholder,
+[data-theme='dismantle'] .paper-sheet-body::placeholder {
+  color: #a8908c;
+}
+
+[data-theme='dismantle'] .paper-sheet-body {
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 29px, #a30f1b26 29px, #a30f1b26 30px) 0 -6px / 100% 30px repeat-y local;
+  color: #3a1a1d;
+}
+
+[data-theme='dismantle'] .paper-sheet-saved.is-error {
+  color: #a30f1b;
+}
+
+[data-theme='dismantle'] .paper-sheet :focus-visible {
+  outline-color: #a30f1b;
+}
+
+@media (max-width: 600px) {
+  [data-theme='dismantle'] .paper-categories button:hover,
+  [data-theme='dismantle'] .paper-categories button:focus-visible {
+    border-color: var(--dm-line-strong);
+  }
+
+  [data-theme='dismantle'] .paper-categories button.is-selected {
+    border-color: var(--dm-blood);
+    background: var(--dm-blood);
+    color: white;
+  }
+
+  [data-theme='dismantle'] .paper-categories button.is-selected .paper-category-count {
+    color: #ffd0d3;
+  }
+}
+
+/* A note dropping in burning: a corona of fire round the ball, flaring as it hits. */
+[data-theme='dismantle'] .paper-ball-slot[data-burning] .paper-ball-fire {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: calc(var(--paper-ball) * 2.55);
+  height: calc(var(--paper-ball) * 2.55);
+  margin: calc(var(--paper-ball) * -1.466) 0 0 calc(var(--paper-ball) * -1.275);
+  background: url('../assets/dismantle/fire-corona.webp') center / contain no-repeat;
+  opacity: min(1, var(--fire, 0));
+  scale: calc(0.86 + min(1.6, var(--fire, 0)) * 0.14);
+  transform-origin: 50% 57.5%;
+  pointer-events: none;
+}
+
+[data-theme='dismantle'] .paper-ball-slot[data-burning] .paper-ball-fire.is-back {
+  background:
+    url('../assets/dismantle/fire-corona.webp') center / contain no-repeat,
+    radial-gradient(circle at 50% 57.5%, #ffb34766 0%, #ff4d1a59 18%, #c3121f2e 30%, transparent 44%);
+  filter: blur(1.2px);
+  animation: dismantle-flame-back 240ms steps(3, jump-none) infinite;
+}
+
+[data-theme='dismantle'] .paper-ball-slot[data-burning] .paper-ball-fire.is-front {
+  animation: dismantle-flame-front 170ms ease-in-out infinite alternate;
+}
+
+[data-theme='dismantle'] .paper-ball-slot[data-burning] .paper-ball-lift canvas {
+  filter:
+    sepia(calc(min(1, var(--fire, 0)) * 0.75))
+    saturate(calc(1 + min(1, var(--fire, 0)) * 2.2))
+    hue-rotate(calc(min(1, var(--fire, 0)) * -18deg))
+    brightness(calc(1 + min(1.6, var(--fire, 0)) * 0.1));
+}
+
+@keyframes dismantle-flame-back {
+  0% { transform: scaleX(-1) scale(1.1) rotate(0deg); }
+  50% { transform: scaleX(-1) scale(1.14, 1.2) rotate(-3deg); }
+  100% { transform: scaleX(-1) scale(1.08, 1.12) rotate(2deg); }
+}
+
+@keyframes dismantle-flame-front {
+  0% { transform: scale(1, 1) rotate(0deg); }
+  100% { transform: scale(1.04, 1.08) rotate(1.6deg); }
+}
+
+/* The canvas the burning edge of the page is drawn on, under the notes themselves. */
+.paper-burn {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Sparks where a burning note hits the page. */
+.ember-burst {
+  position: fixed;
+  z-index: 9000;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.ember-burst::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--size, 84px) * -0.8);
+  left: calc(var(--size, 84px) * -0.8);
+  width: calc(var(--size, 84px) * 1.6);
+  height: calc(var(--size, 84px) * 1.6);
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe2a8cc 0%, #ff7a1a99 26%, #ff1f2f40 50%, transparent 70%);
+  animation: dismantle-ember-flash 560ms ease-out both;
+}
+
+.ember-burst-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--ember, 2px);
+  height: var(--ember, 2px);
+  margin: calc(var(--ember, 2px) / -2) 0 0 calc(var(--ember, 2px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d6 0%, #ffbf5a 40%, #ff4d1a 100%);
+  box-shadow: 0 0 5px #ff7a1a, 0 0 11px #ff3d1a99;
+  opacity: 0;
+  animation: dismantle-ember-fly var(--duration, 700ms) cubic-bezier(0.15, 0.7, 0.35, 1) var(--delay, 0ms) both;
+}
+
+@keyframes dismantle-ember-flash {
+  0% { opacity: 0; transform: scale(0.4); }
+  18% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes dismantle-ember-fly {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  10% { opacity: 1; }
+  65% { opacity: 0.95; transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px)) scale(1); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.15px), calc(var(--dy) * 1px - 12px)) scale(0.35); }
+}
+
+/* ——— Cursor ——— */
+
+[data-theme='dismantle'] .cursor-shape,
+[data-theme='dismantle'] .blocked-cell-feedback path {
+  fill: #f3ebe9;
+  stroke: #12080a;
+}
+
+[data-theme='dismantle'] .custom-cursor > svg {
+  filter: drop-shadow(0 0 3px #ff1f2f4d) drop-shadow(0 1px 1px #000000b3);
+}
+
+/* ——— A kept promise: two quick cuts, a flash and a spray of blood ——— */
+
+.slash-burst {
+  position: fixed;
+  z-index: 9000;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.slash-burst::before {
+  content: '';
+  position: absolute;
+  top: -22px;
+  left: -22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd0d3a6 0%, #ff1f2f59 34%, transparent 70%);
+  animation: dismantle-slash-flash 420ms ease-out both;
+}
+
+.slash-burst-cut {
+  position: absolute;
+  top: -1.5px;
+  left: calc(var(--length, 48px) / -2);
+  width: var(--length, 48px);
+  height: 3px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, #ff2a3a 16%, #fff4f4 50%, #ff2a3a 84%, transparent);
+  box-shadow: 0 0 8px #ff1f2f, 0 0 18px #ff1f2f80;
+  opacity: 0;
+  transform-origin: 50% 50%;
+  animation: dismantle-slash-cut 480ms cubic-bezier(0.1, 0.9, 0.25, 1) var(--delay, 0ms) both;
+}
+
+.slash-burst-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  animation: dismantle-slash-spray 900ms cubic-bezier(0.2, 0.75, 0.35, 1) var(--delay, 0ms) both;
+}
+
+.slash-burst-piece.is-drop {
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50% 50% 50% 0;
+  background: radial-gradient(circle at 35% 35%, #ff7a82, #c3121f 58%, #6d0710);
+}
+
+.slash-burst-piece.is-spark {
+  width: 2.4px;
+  height: 2.4px;
+  margin: -1.2px 0 0 -1.2px;
+  border-radius: 50%;
+  background: #ffe3e5;
+  box-shadow: 0 0 6px #ff1f2f;
+}
+
+.slash-burst-piece.is-shard {
+  width: 10px;
+  height: 1.6px;
+  margin: -0.8px 0 0 -5px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, #ffb3b8, transparent);
+}
+
+@keyframes dismantle-slash-flash {
+  0% { opacity: 0; transform: scale(0.3); }
+  20% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+@keyframes dismantle-slash-cut {
+  0% { opacity: 1; transform: rotate(var(--angle)) scaleX(0) scaleY(1.6); }
+  26% { opacity: 1; transform: rotate(var(--angle)) scaleX(1) scaleY(1.2); }
+  100% { opacity: 0; transform: rotate(var(--angle)) scaleX(1.12) scaleY(0.15); }
+}
+
+@keyframes dismantle-slash-spray {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(calc(var(--rotate) * 1deg)) scale(0.4);
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  55% {
+    opacity: 1;
+    transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px)) rotate(calc(var(--rotate) * 1deg)) scale(var(--scale));
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--dx) * 1.12px), calc(var(--dy) * 1px + 22px)) rotate(calc(var(--rotate) * 1deg + 40deg)) scale(calc(var(--scale) * 0.7));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-panel-open .domain-anri-marks {
+    opacity: 0.28;
+  }
+
+  .domain-scar-glow,
+  .domain-anri-marks,
+  .domain-aura,
+  .domain-caster,
+  .domain-shrine,
+  .cleave-mark,
+  [data-theme='dismantle'] .day-label.is-today .today-marker,
+  [data-theme='dismantle'] .hero-heading h1 em::before,
+  [data-theme='dismantle'] .hero-heading h1 em::after {
+    animation: none !important;
+  }
+}
+
+/* ——— The Dismantle swatch, in every theme's picker: Anri peeks over its edge ——— */
+
+.theme-option-dismantle .theme-option-sticker {
+  top: -31px;
+  right: 18px;
+  width: 46px;
+  filter: drop-shadow(0 2px 3px #00000038);
+  transform: rotate(-3deg);
+  transform-origin: 50% 100%;
+}
+
+.theme-option-dismantle:hover .theme-option-sticker,
+.theme-option-dismantle.is-selected .theme-option-sticker {
+  transform: translateY(-3px) rotate(2deg);
+}
+
+/* ——— Choosing Dismantle: the blade's line, drawn on the new look as it cuts the old one open ——— */
+
+:root.is-theme-cutting::after {
+  content: '';
+  position: fixed;
+  z-index: 2147483647;
+  top: var(--theme-cut-y, 50%);
+  left: var(--theme-cut-x, 50%);
+  width: 320vmax;
+  height: 2.4px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, #ff2a3a 22%, #fff4f4 50%, #ff2a3a 78%, transparent);
+  box-shadow: 0 0 10px #ff1f2f, 0 0 28px #ff1f2fa6;
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(var(--theme-cut-angle, -32deg));
+  animation: dismantle-theme-cut 900ms ease-out both;
+}
+
+@keyframes dismantle-theme-cut {
+  0%, 22% { opacity: 1; }
+  100% { opacity: 0; }
+}

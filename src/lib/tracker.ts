@@ -7,6 +7,7 @@ export const MAX_REMINDERS = 10;
 export const MAX_REMINDER_WORDS = 10;
 export const MAX_REMINDER_LENGTH = 80;
 export const STORAGE_KEY = 'angelo-routine-v1';
+export const DEFAULT_TITLE = 'No Excuses Grind';
 
 export interface Habit {
   id: string;
@@ -304,7 +305,7 @@ export function createInitialState(now: Date = new Date()): TrackerState {
 
   return {
     version: 2,
-    title: 'No Excuses Grind',
+    title: DEFAULT_TITLE,
     startedOn: sampleStart,
     habitPlans: { [planMonth]: habits },
     completions,

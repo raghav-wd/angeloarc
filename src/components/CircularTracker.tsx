@@ -3,8 +3,17 @@ import { createPortal } from 'react-dom'
 import { Check, LockKeyhole, Plus, X } from 'lucide-react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { CursorFeedback } from './CustomCursor'
+import { BloodPatterns, CleaveMark } from './DismantleArt'
+import { BerryPatterns, Blossom } from './StrawberryArt'
+import { WheelShatterCanvas } from './WheelShatterCanvas'
+import { useTheme } from '../hooks/useTheme'
+import { spawnBerryBurst } from '../lib/berryBurst'
 import { TODAY_TASKS_ID } from '../lib/dayTasks'
+import { spawnSlashBurst } from '../lib/dismantle'
+import { createRandom } from '../lib/paperMesh'
 import { habitLabelProgress, sweepProgress, TEXT_SWEEP } from '../lib/radialSweep'
+import { themeDefinition } from '../lib/theme'
+import { sectorPolygon, shatterTiles, wheelSlashes } from '../lib/wheelShatter'
 import {
   annularSectorPath,
   dateKey,
@@ -51,6 +60,8 @@ interface CircularTrackerProps {
   taskDayLeaving?: boolean
   /** While today's task list is open, dates move the list instead of opening notes. */
   onTaskDayPick?: (day: number) => void
+  /** The wheel is sweeping away; Dismantle cuts it to pieces as it goes. */
+  sweepingOut?: boolean
 }
 
 interface SelectedDay {
@@ -353,12 +364,19 @@ function HabitLabel({
 function ConsistencyScore({
   center,
   stats,
+  crown = 'spark',
+  label,
 }: {
   center: number
   stats: ReturnType<typeof getMonthStats>
+  /** Strawberry crowns the score with a blossom, Dismantle with two fresh cuts. */
+  crown?: 'spark' | 'blossom' | 'cleave'
+  label: string
 }) {
   const [display, setDisplay] = useState(stats.percentage)
   const current = useRef(stats.percentage)
+  const flower = useRef<SVGGElement>(null)
+  const shownPercentage = useRef(stats.percentage)
 
   useEffect(() => {
     const from = current.current
@@ -377,21 +395,58 @@ function ConsistencyScore({
     return () => cancelAnimationFrame(frame)
   }, [stats.percentage])
 
+  // The blossom gives a little twirl whenever the score moves. A fifth of a
+  // turn lands every petal where its neighbour was, so it settles seamlessly.
+  // The cuts are made again instead: a flinch, a flash, and they heal shut.
+  useEffect(() => {
+    if (shownPercentage.current === stats.percentage) return
+    const rising = stats.percentage > shownPercentage.current
+    shownPercentage.current = stats.percentage
+    const element = flower.current?.querySelector('.blossom, .cleave-mark')
+    if (!element || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    element.getAnimations().forEach((animation) => animation.cancel())
+    if (element.classList.contains('cleave-mark')) {
+      element.animate([
+        { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
+        { transform: `translate(${rising ? 3 : -3}px, ${rising ? -3 : 3}px) scale(1.32)`, filter: 'brightness(2.4)', offset: 0.22 },
+        { transform: 'translate(0, 0) scale(0.94)', filter: 'brightness(1.3)', offset: 0.6 },
+        { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
+      ], { duration: 620, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' })
+      return
+    }
+    const turn = rising ? 72 : -72
+    element.animate([
+      { transform: 'rotate(0deg) scale(1)' },
+      { transform: `rotate(${turn * 0.55}deg) scale(1.28)`, offset: 0.45 },
+      { transform: `rotate(${turn}deg) scale(1)` },
+    ], { duration: 720, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)' })
+  }, [stats.percentage])
+
   return (
     <g
       className="consistency-score sweep-item"
       style={sweepStyle(TEXT_SWEEP.consistencyScore)}
       aria-label={`${stats.percentage}% monthly consistency, ${stats.completed} of ${stats.total} check-ins`}
     >
-      <path
-        className="center-spark"
-        d={`M${center} ${center - 67}v14M${center - 7} ${center - 60}h14M${center - 4.5} ${center - 64.5}l9 9M${center + 4.5} ${center - 64.5}l-9 9`}
-        aria-hidden="true"
-      />
+      {crown === 'blossom' ? (
+        <g ref={flower}>
+          <Blossom x={center} y={center - 61} scale={1.3} className="score-blossom" />
+        </g>
+      ) : crown === 'cleave' ? (
+        <g ref={flower}>
+          <CleaveMark x={center} y={center - 60} />
+        </g>
+      ) : (
+        <path
+          className="center-spark"
+          d={`M${center} ${center - 67}v14M${center - 7} ${center - 60}h14M${center - 4.5} ${center - 64.5}l9 9M${center + 4.5} ${center - 64.5}l-9 9`}
+          aria-hidden="true"
+        />
+      )}
       <text x={center + 3} y={center + 9} className="score-value" textAnchor="middle" aria-hidden="true">
         {display}<tspan className="score-percent" dx="4" dy="-23">%</tspan>
       </text>
-      <text x={center} y={center + 35} className="score-label" textAnchor="middle" aria-hidden="true">CONSISTENCY</text>
+      <text x={center} y={center + 35} className="score-label" textAnchor="middle" aria-hidden="true">{label}</text>
       <line x1={center - 10} x2={center + 10} y1={center + 51} y2={center + 51} className="score-divider" />
       <text x={center} y={center + 72} className="score-detail" textAnchor="middle" aria-hidden="true">
         {stats.completed} of {stats.total} check-ins
@@ -416,12 +471,20 @@ export function CircularTracker({
   taskDay = null,
   taskDayLeaving = false,
   onTaskDayPick,
+  sweepingOut = false,
 }: CircularTrackerProps) {
   const [hovered, setHovered] = useState<HoveredCell | null>(null)
   const [focused, setFocused] = useState({ habit: 0, day: 1 })
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null)
   const svg = useRef<SVGSVGElement>(null)
-  const unavailablePatternId = `unavailable-${useId().replaceAll(':', '')}`
+  const svgId = useId().replaceAll(':', '')
+  const unavailablePatternId = `unavailable-${svgId}`
+  const berryId = `berry-${svgId}`
+  const bloodId = `blood-${svgId}`
+  const theme = useTheme()
+  const strawberry = theme === 'strawberry'
+  const dismantle = theme === 'dismantle'
+  const copy = themeDefinition(theme).copy
   const days = daysInMonth(month)
   const sectors = useMemo(() => getDaySectors(month), [month])
   const habits = getHabitsForMonth(state, month)
@@ -434,6 +497,22 @@ export function CircularTracker({
   const center = size / 2
   const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month
   const activeMonthKey = monthKey(month)
+  // How the wheel is cut to pieces as it sweeps away, worked out once per month and shape.
+  const shatter = useMemo(() => {
+    if (!dismantle) return null
+    const random = createRandom(`shatter:${activeMonthKey}:${habits.length}`)
+    const slashes = wheelSlashes(center, innerRadius, outerRadius, random, Math.round(days * (2 + habits.length * 0.14)))
+    const tiles = Array.from({ length: habits.length }, (_, habitIndex) => {
+      const outer = outerRadius - habitIndex * ringStep
+      return sectors.map((sector) => ({
+        polygon: sectorPolygon(center, center, outer - ringWidth, outer, sector.startAngle, sector.endAngle),
+        angle: sector.midAngle,
+      }))
+    }).flat()
+    const plan = shatterTiles(center, tiles, slashes, random)
+    return { tiles: plan, slashes: [...slashes, ...plan.flatMap((tile) => (tile.local ? [tile.local] : []))] }
+  }, [activeMonthKey, center, days, dismantle, habits.length, outerRadius, sectors])
+  const shattering = Boolean(shatter && sweepingOut && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const selectedDayForMonth = selectedDay?.monthKey === activeMonthKey ? selectedDay : null
   const pickingTaskDay = Boolean(onTaskDayPick)
   const dateLabelsEnabled = notesEnabled || pickingTaskDay
@@ -494,7 +573,17 @@ export function CircularTracker({
       y: rect.y + rect.height / 2,
       followPointer: false,
     })
-    if (accepted) animateCell(element)
+    if (!accepted) return
+    animateCell(element)
+    // Judged on the outcome, since a first tap on sample progress clears it
+    // before keeping the promise. The click has committed by the next frame.
+    if (strawberry || dismantle) {
+      requestAnimationFrame(() => {
+        if (!element.classList.contains('is-done')) return
+        const burst = strawberry ? spawnBerryBurst : spawnSlashBurst
+        burst(rect.x + rect.width / 2, rect.y + rect.height / 2)
+      })
+    }
   }
 
   function animateCell(element: SVGPathElement) {
@@ -542,22 +631,51 @@ export function CircularTracker({
 
   return (
     <>
+      {shattering && shatter && (
+        <WheelShatterCanvas
+          svg={svg}
+          size={size}
+          center={center}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
+          days={days}
+          tiles={shatter.tiles}
+          slashes={shatter.slashes}
+          bloodId={bloodId}
+          unavailableId={unavailablePatternId}
+        />
+      )}
       <svg
         ref={svg}
-        className="circular-tracker"
+        className={`circular-tracker ${shattering ? 'is-shattering' : ''}`}
         viewBox={`0 0 ${size} ${size}`}
         role="group"
         aria-label={`${new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(2024, month.month))} ${month.year} habit tracker`}
         aria-describedby="tracker-keyboard-help"
+        style={strawberry ? {
+          '--berry-fill': `url(#${berryId}-fill)`,
+          '--berry-fill-hover': `url(#${berryId}-fill-hover)`,
+          '--berry-score': `url(#${berryId}-score)`,
+        } as CSSProperties : dismantle ? {
+          '--blood-fill': `url(#${bloodId}-fill)`,
+          '--blood-fill-hover': `url(#${bloodId}-fill-hover)`,
+          '--blood-score': `url(#${bloodId}-score)`,
+        } as CSSProperties : undefined}
       >
         <defs>
           <pattern id={unavailablePatternId} width="8" height="6" patternUnits="userSpaceOnUse">
-            <rect width="8" height="6" fill="#f1f1ef" />
-            <path d="M-2 4 L0 2 L2 4 L4 2 L6 4 L8 2 L10 4" fill="none" stroke="#b9b9b6" strokeWidth="0.8" />
+            <rect className="unavailable-ground" width="8" height="6" fill="#f1f1ef" />
+            <path className="unavailable-zigzag" d="M-2 4 L0 2 L2 4 L4 2 L6 4 L8 2 L10 4" fill="none" stroke="#b9b9b6" strokeWidth="0.8" />
           </pattern>
+          {strawberry && (
+            <BerryPatterns id={berryId} center={center} innerRadius={innerRadius} outerRadius={outerRadius} size={size} />
+          )}
+          {dismantle && (
+            <BloodPatterns id={bloodId} center={center} innerRadius={innerRadius} outerRadius={outerRadius} size={size} />
+          )}
         </defs>
         <text className="habit-list-heading sweep-item" style={sweepStyle(TEXT_SWEEP.ritualsHeading)} x={center - 223} y={center - outerRadius - 16}>
-          THE DAILY RITUALS
+          {copy.ritualsHeading}
         </text>
         <text className="habit-list-count sweep-item" style={sweepStyle(TEXT_SWEEP.ritualsHeading)} x={center - 18} y={center - outerRadius - 16} textAnchor="end">
           {String(habits.length).padStart(2, '0')}
@@ -697,7 +815,12 @@ export function CircularTracker({
             </g>
           )
         })}
-        <ConsistencyScore center={center} stats={stats} />
+        <ConsistencyScore
+          center={center}
+          stats={stats}
+          crown={strawberry ? 'blossom' : dismantle ? 'cleave' : 'spark'}
+          label={copy.scoreLabel}
+        />
       </svg>
       <p id="tracker-keyboard-help" className="sr-only">
         Use arrow keys to move between days and habits. Press Enter or Space to mark a habit done or undone.

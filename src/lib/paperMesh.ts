@@ -352,6 +352,8 @@ export interface PaperInk {
   paper: readonly [number, number, number]
   /** Colour shadows fall towards. */
   shadow: readonly [number, number, number]
+  /** Colour of the hairline round a flattened sheet. */
+  edge?: readonly [number, number, number]
 }
 
 export const PAPER_INK: PaperInk = {
@@ -414,8 +416,9 @@ export function paintPaperFrame(
       else context.lineTo(x, y)
     })
     context.closePath()
+    const [edgeRed, edgeGreen, edgeBlue] = ink.edge ?? [160, 160, 154]
     context.lineWidth = 1
-    context.strokeStyle = `rgba(160, 160, 154, ${0.75 * edgeAlpha})`
+    context.strokeStyle = `rgba(${edgeRed}, ${edgeGreen}, ${edgeBlue}, ${0.75 * edgeAlpha})`
     context.stroke()
   }
 }
