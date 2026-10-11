@@ -138,7 +138,7 @@ Rate limiting is per API instance, which is appropriate for the expected small d
 - Each concentric ring is a habit; each cell is a calendar day.
 - Today and earlier days can be checked off. Future dates remain locked based on the device's local calendar.
 - Gray zig-zag cells mark dates before the tracker or that habit began. They cannot be checked off and are excluded from consistency.
-- Monthly consistency is completed check-ins divided by eligible check-ins in the displayed month. Eligible future days remain in the denominator, while pre-start days do not.
+- Monthly consistency is completed check-ins divided by eligible check-ins from the start of the displayed month through today. Future days and pre-start days are excluded.
 - Habits use effective-dated monthly plans: changing September leaves August intact and applies from September forward until another month has its own plan. A habit first added during the current month begins on that day.
 - Settings open on the current month, can switch through tracked months, support up to nine habits per monthly plan, and save every valid change automatically.
 - The first guest visit includes starter habits and clearly labeled sample progress.

@@ -334,10 +334,19 @@ function beginRealTracker(state: TrackerState, now: Date): TrackerState {
 export function getMonthStats(
   state: TrackerState,
   month: Month,
+  now: Date = new Date(),
 ): { completed: number; total: number; percentage: number } {
   const dayCount = daysInMonth(month);
   const habits = getHabitsForMonth(state, month);
   const key = monthKey(month);
+  const firstDate = dateKey(month, 1);
+  const lastDate = dateKey(month, dayCount);
+  const todayKey = localDateKey(now);
+  const lastEligibleDay = todayKey < firstDate
+    ? 0
+    : todayKey < lastDate
+      ? Number(todayKey.slice(8, 10))
+      : dayCount;
   let total = 0;
   let completed = 0;
 
@@ -346,8 +355,9 @@ export function getMonthStats(
     const availableMonth = availableFrom.slice(0, 7);
     if (availableMonth > key) continue;
     const firstDay = availableMonth === key ? Number(availableFrom.slice(8, 10)) : 1;
-    total += dayCount - firstDay + 1;
-    for (let day = firstDay; day <= dayCount; day += 1) {
+    if (firstDay > lastEligibleDay) continue;
+    total += lastEligibleDay - firstDay + 1;
+    for (let day = firstDay; day <= lastEligibleDay; day += 1) {
       const ids = state.completions[dateKey(month, day)] ?? [];
       if (ids.includes(habit.id)) completed += 1;
     }

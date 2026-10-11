@@ -219,8 +219,8 @@ describe('initial demo state and reset', () => {
     assert.deepEqual(cleared.completions, {});
     assert.deepEqual(Object.keys(cleared.habitPlans), ['2026-09']);
     assert.ok(cleared.habitPlans['2026-09'].every((habit) => habit.startedOn === '2026-09-19'));
-    assert.deepEqual(getMonthStats(cleared, september), {
-      completed: 0, total: 6 * 12, percentage: 0,
+    assert.deepEqual(getMonthStats(cleared, september, septemberNineteenth), {
+      completed: 0, total: 6, percentage: 0,
     });
     assert.equal(demo.startedOn, '2026-09-01');
     assert.notDeepEqual(demo.completions, {});
@@ -367,10 +367,10 @@ describe('habit plan change points and availability', () => {
     };
     const parsed = parseStoredState(JSON.stringify(lifetimeState));
     assert.equal(new Set(Object.values(parsed.habitPlans).flat().map((habit) => habit.id)).size, 18);
-    assert.deepEqual(getMonthStats(parsed, { year: 2026, month: 0 }), {
+    assert.deepEqual(getMonthStats(parsed, { year: 2026, month: 0 }, new Date(2026, 1, 1, 12)), {
       completed: 1, total: 279, percentage: 0,
     });
-    assert.deepEqual(getMonthStats(parsed, { year: 2026, month: 1 }), {
+    assert.deepEqual(getMonthStats(parsed, { year: 2026, month: 1 }, new Date(2026, 2, 1, 12)), {
       completed: 1, total: 252, percentage: 0,
     });
     const tooMany: Habit[] = Array.from({ length: 10 }, (_, index) => ({
@@ -392,7 +392,7 @@ describe('habit plan change points and availability', () => {
 });
 
 describe('partial-month consistency', () => {
-  it('counts eligible habit-days, including future eligible days, in the denominator', () => {
+  it('counts eligible habit-days through today and excludes future days', () => {
     const state = deepFreeze(stateWith({
       startedOn: '2026-09-10',
       habitPlans: {
@@ -410,12 +410,12 @@ describe('partial-month consistency', () => {
         '2026-10-01': ['move', 'read'],
       },
     }));
-    assert.deepEqual(getMonthStats(state, september), {
-      completed: 4,
-      total: 32,
-      percentage: 13,
+    assert.deepEqual(getMonthStats(state, september, new Date(2026, 8, 20, 12)), {
+      completed: 2,
+      total: 12,
+      percentage: 17,
     });
-    assert.deepEqual(getMonthStats(state, august), { completed: 0, total: 0, percentage: 0 });
+    assert.deepEqual(getMonthStats(state, august, new Date(2026, 8, 20, 12)), { completed: 0, total: 0, percentage: 0 });
   });
 
   it('handles partial leap and common Februaries', () => {
@@ -427,7 +427,7 @@ describe('partial-month consistency', () => {
       completions: { '2024-02-29': ['move'] },
       isDemo: false,
     };
-    assert.deepEqual(getMonthStats(leapState, { year: 2024, month: 1 }), {
+    assert.deepEqual(getMonthStats(leapState, { year: 2024, month: 1 }, new Date(2024, 2, 1, 12)), {
       completed: 1, total: 2, percentage: 50,
     });
     const commonState: TrackerState = {
@@ -436,7 +436,7 @@ describe('partial-month consistency', () => {
       habitPlans: { '2025-02': [monthHabit('move', 'Move', '2025-02-28')] },
       completions: { '2025-02-28': ['move'] },
     };
-    assert.deepEqual(getMonthStats(commonState, { year: 2025, month: 1 }), {
+    assert.deepEqual(getMonthStats(commonState, { year: 2025, month: 1 }, new Date(2025, 2, 1, 12)), {
       completed: 1, total: 1, percentage: 100,
     });
   });
@@ -447,17 +447,33 @@ describe('partial-month consistency', () => {
       habitPlans: { '2026-09': [] },
       completions: {},
     });
-    assert.deepEqual(getMonthStats(state, september), { completed: 0, total: 0, percentage: 0 });
-    assert.deepEqual(getMonthStats(state, august), { completed: 0, total: 0, percentage: 0 });
+    assert.deepEqual(getMonthStats(state, september, septemberNineteenth), { completed: 0, total: 0, percentage: 0 });
+    assert.deepEqual(getMonthStats(state, august, septemberNineteenth), { completed: 0, total: 0, percentage: 0 });
   });
 
-  it('reaches 100 percent when every eligible day is complete', () => {
+  it('reaches 100 percent when every eligible day through today is complete', () => {
     const state = stateWith({
-      startedOn: '2026-09-28',
-      habitPlans: { '2026-09': [monthHabit('move', 'Move', '2026-09-28')] },
+      startedOn: '2026-09-01',
+      habitPlans: {
+        '2026-09': [
+          monthHabit('move', 'Move', '2026-09-01'),
+          monthHabit('read', 'Read', '2026-09-01'),
+        ],
+      },
     });
-    for (let day = 28; day <= 30; day += 1) state.completions[dateKey(september, day)] = ['move'];
-    assert.deepEqual(getMonthStats(state, september), { completed: 3, total: 3, percentage: 100 });
+    state.completions['2026-09-01'] = ['move', 'read'];
+    assert.deepEqual(getMonthStats(state, september, new Date(2026, 8, 1, 12)), {
+      completed: 2, total: 2, percentage: 100,
+    });
+  });
+
+  it('returns zeroes when the displayed month is entirely in the future', () => {
+    const state = stateWith({
+      habitPlans: { '2026-09': [monthHabit('move', 'Move', '2026-09-01')] },
+    });
+    assert.deepEqual(getMonthStats(state, october, septemberNineteenth), {
+      completed: 0, total: 0, percentage: 0,
+    });
   });
 });
 

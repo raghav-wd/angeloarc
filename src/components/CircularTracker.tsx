@@ -488,7 +488,7 @@ export function CircularTracker({
   const days = daysInMonth(month)
   const sectors = useMemo(() => getDaySectors(month), [month])
   const habits = getHabitsForMonth(state, month)
-  const stats = getMonthStats(state, month)
+  const stats = getMonthStats(state, month, today)
   const ringStep = 29
   const ringWidth = 25.5
   const innerRadius = 112
@@ -829,7 +829,7 @@ export function CircularTracker({
         Future days are locked until their local calendar date.
         Zig-zag cells predate the tracker or habit and cannot be checked off.
         A black dot between a date and the tracker means you visited ANGELO on that day.
-        Consistency is completed check-ins divided by check-ins available in the displayed month.
+        Consistency is completed check-ins divided by check-ins available from the start of the displayed month through today.
       </p>
       {hovered && (
         <CellTooltip
